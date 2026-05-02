@@ -1,0 +1,1416 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "App.tsx",
+      "file_type": "code",
+      "source_file": "App.tsx",
+      "source_location": "L1",
+      "id": "app_tsx",
+      "community": 11,
+      "norm_label": "app.tsx"
+    },
+    {
+      "label": "App()",
+      "file_type": "code",
+      "source_file": "App.tsx",
+      "source_location": "L8",
+      "id": "app_app",
+      "community": 11,
+      "norm_label": "app()"
+    },
+    {
+      "label": "babel.config.js",
+      "file_type": "code",
+      "source_file": "babel.config.js",
+      "source_location": "L1",
+      "id": "babel_config_js",
+      "community": 19,
+      "norm_label": "babel.config.js"
+    },
+    {
+      "label": "extract_ast.py",
+      "file_type": "code",
+      "source_file": "extract_ast.py",
+      "source_location": "L1",
+      "id": "extract_ast_py",
+      "community": 20,
+      "norm_label": "extract_ast.py"
+    },
+    {
+      "label": "index.ts",
+      "file_type": "code",
+      "source_file": "index.ts",
+      "source_location": "L1",
+      "id": "index_ts",
+      "community": 21,
+      "norm_label": "index.ts"
+    },
+    {
+      "label": "MainActivity.kt",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainActivity.kt",
+      "source_location": "L1",
+      "id": "android_app_src_main_java_com_anonymous_gohomeychef_mainactivity_kt",
+      "community": 2,
+      "norm_label": "mainactivity.kt"
+    },
+    {
+      "label": "MainActivity",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainActivity.kt",
+      "source_location": "L13",
+      "id": "mainactivity_mainactivity",
+      "community": 2,
+      "norm_label": "mainactivity"
+    },
+    {
+      "label": ".onCreate()",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainActivity.kt",
+      "source_location": "L14",
+      "id": "mainactivity_mainactivity_oncreate",
+      "community": 2,
+      "norm_label": ".oncreate()"
+    },
+    {
+      "label": ".getMainComponentName()",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainActivity.kt",
+      "source_location": "L26",
+      "id": "mainactivity_mainactivity_getmaincomponentname",
+      "community": 2,
+      "norm_label": ".getmaincomponentname()"
+    },
+    {
+      "label": ".createReactActivityDelegate()",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainActivity.kt",
+      "source_location": "L32",
+      "id": "mainactivity_mainactivity_createreactactivitydelegate",
+      "community": 2,
+      "norm_label": ".createreactactivitydelegate()"
+    },
+    {
+      "label": ".invokeDefaultOnBackPressed()",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainActivity.kt",
+      "source_location": "L48",
+      "id": "mainactivity_mainactivity_invokedefaultonbackpressed",
+      "community": 2,
+      "norm_label": ".invokedefaultonbackpressed()"
+    },
+    {
+      "label": "MainApplication.kt",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L1",
+      "id": "android_app_src_main_java_com_anonymous_gohomeychef_mainapplication_kt",
+      "community": 0,
+      "norm_label": "mainapplication.kt"
+    },
+    {
+      "label": "MainApplication",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L19",
+      "id": "mainapplication_mainapplication",
+      "community": 0,
+      "norm_label": "mainapplication"
+    },
+    {
+      "label": "getPackages()",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L24",
+      "id": "mainapplication_getpackages",
+      "community": 0,
+      "norm_label": "getpackages()"
+    },
+    {
+      "label": "getJSMainModuleName()",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L30",
+      "id": "mainapplication_getjsmainmodulename",
+      "community": 0,
+      "norm_label": "getjsmainmodulename()"
+    },
+    {
+      "label": "getUseDeveloperSupport()",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L32",
+      "id": "mainapplication_getusedevelopersupport",
+      "community": 0,
+      "norm_label": "getusedevelopersupport()"
+    },
+    {
+      "label": ".onCreate()",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L41",
+      "id": "mainapplication_mainapplication_oncreate",
+      "community": 0,
+      "norm_label": ".oncreate()"
+    },
+    {
+      "label": ".onConfigurationChanged()",
+      "file_type": "code",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L52",
+      "id": "mainapplication_mainapplication_onconfigurationchanged",
+      "community": 0,
+      "norm_label": ".onconfigurationchanged()"
+    },
+    {
+      "label": "ChefTip.tsx",
+      "file_type": "code",
+      "source_file": "src\\components\\ChefTip.tsx",
+      "source_location": "L1",
+      "id": "src_components_cheftip_tsx",
+      "community": 12,
+      "norm_label": "cheftip.tsx"
+    },
+    {
+      "label": "ChefTip()",
+      "file_type": "code",
+      "source_file": "src\\components\\ChefTip.tsx",
+      "source_location": "L10",
+      "id": "cheftip_cheftip",
+      "community": 12,
+      "norm_label": "cheftip()"
+    },
+    {
+      "label": "EventCard.tsx",
+      "file_type": "code",
+      "source_file": "src\\components\\EventCard.tsx",
+      "source_location": "L1",
+      "id": "src_components_eventcard_tsx",
+      "community": 22,
+      "norm_label": "eventcard.tsx"
+    },
+    {
+      "label": "OrderCard.tsx",
+      "file_type": "code",
+      "source_file": "src\\components\\OrderCard.tsx",
+      "source_location": "L1",
+      "id": "src_components_ordercard_tsx",
+      "community": 5,
+      "norm_label": "ordercard.tsx"
+    },
+    {
+      "label": "getStatusColor()",
+      "file_type": "code",
+      "source_file": "src\\components\\OrderCard.tsx",
+      "source_location": "L31",
+      "id": "ordercard_getstatuscolor",
+      "community": 5,
+      "norm_label": "getstatuscolor()"
+    },
+    {
+      "label": "getStatusBg()",
+      "file_type": "code",
+      "source_file": "src\\components\\OrderCard.tsx",
+      "source_location": "L42",
+      "id": "ordercard_getstatusbg",
+      "community": 5,
+      "norm_label": "getstatusbg()"
+    },
+    {
+      "label": "getActionLabel()",
+      "file_type": "code",
+      "source_file": "src\\components\\OrderCard.tsx",
+      "source_location": "L47",
+      "id": "ordercard_getactionlabel",
+      "community": 5,
+      "norm_label": "getactionlabel()"
+    },
+    {
+      "label": "PantryCard.tsx",
+      "file_type": "code",
+      "source_file": "src\\components\\PantryCard.tsx",
+      "source_location": "L1",
+      "id": "src_components_pantrycard_tsx",
+      "community": 23,
+      "norm_label": "pantrycard.tsx"
+    },
+    {
+      "label": "SlotCard.tsx",
+      "file_type": "code",
+      "source_file": "src\\components\\SlotCard.tsx",
+      "source_location": "L1",
+      "id": "src_components_slotcard_tsx",
+      "community": 24,
+      "norm_label": "slotcard.tsx"
+    },
+    {
+      "label": "SlotProgress.tsx",
+      "file_type": "code",
+      "source_file": "src\\components\\SlotProgress.tsx",
+      "source_location": "L1",
+      "id": "src_components_slotprogress_tsx",
+      "community": 25,
+      "norm_label": "slotprogress.tsx"
+    },
+    {
+      "label": "StatCard.tsx",
+      "file_type": "code",
+      "source_file": "src\\components\\StatCard.tsx",
+      "source_location": "L1",
+      "id": "src_components_statcard_tsx",
+      "community": 26,
+      "norm_label": "statcard.tsx"
+    },
+    {
+      "label": "StatusModal.tsx",
+      "file_type": "code",
+      "source_file": "src\\components\\StatusModal.tsx",
+      "source_location": "L1",
+      "id": "src_components_statusmodal_tsx",
+      "community": 13,
+      "norm_label": "statusmodal.tsx"
+    },
+    {
+      "label": "SuccessAnimation()",
+      "file_type": "code",
+      "source_file": "src\\components\\StatusModal.tsx",
+      "source_location": "L36",
+      "id": "statusmodal_successanimation",
+      "community": 13,
+      "norm_label": "successanimation()"
+    },
+    {
+      "label": "AuthContext.tsx",
+      "file_type": "code",
+      "source_file": "src\\context\\AuthContext.tsx",
+      "source_location": "L1",
+      "id": "src_context_authcontext_tsx",
+      "community": 3,
+      "norm_label": "authcontext.tsx"
+    },
+    {
+      "label": "AuthProvider()",
+      "file_type": "code",
+      "source_file": "src\\context\\AuthContext.tsx",
+      "source_location": "L39",
+      "id": "authcontext_authprovider",
+      "community": 3,
+      "norm_label": "authprovider()"
+    },
+    {
+      "label": "useAuth()",
+      "file_type": "code",
+      "source_file": "src\\context\\AuthContext.tsx",
+      "source_location": "L130",
+      "id": "authcontext_useauth",
+      "community": 3,
+      "norm_label": "useauth()"
+    },
+    {
+      "label": "SocialContext.tsx",
+      "file_type": "code",
+      "source_file": "src\\context\\SocialContext.tsx",
+      "source_location": "L1",
+      "id": "src_context_socialcontext_tsx",
+      "community": 3,
+      "norm_label": "socialcontext.tsx"
+    },
+    {
+      "label": "SocialProvider()",
+      "file_type": "code",
+      "source_file": "src\\context\\SocialContext.tsx",
+      "source_location": "L51",
+      "id": "socialcontext_socialprovider",
+      "community": 3,
+      "norm_label": "socialprovider()"
+    },
+    {
+      "label": "useSocial()",
+      "file_type": "code",
+      "source_file": "src\\context\\SocialContext.tsx",
+      "source_location": "L174",
+      "id": "socialcontext_usesocial",
+      "community": 3,
+      "norm_label": "usesocial()"
+    },
+    {
+      "label": "AppNavigator.tsx",
+      "file_type": "code",
+      "source_file": "src\\navigation\\AppNavigator.tsx",
+      "source_location": "L1",
+      "id": "src_navigation_appnavigator_tsx",
+      "community": 27,
+      "norm_label": "appnavigator.tsx"
+    },
+    {
+      "label": "AddPantryItemScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\AddPantryItemScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_addpantryitemscreen_tsx",
+      "community": 6,
+      "norm_label": "addpantryitemscreen.tsx"
+    },
+    {
+      "label": "pickImage()",
+      "file_type": "code",
+      "source_file": "src\\screens\\AddPantryItemScreen.tsx",
+      "source_location": "L66",
+      "id": "addpantryitemscreen_pickimage",
+      "community": 6,
+      "norm_label": "pickimage()"
+    },
+    {
+      "label": "takePhoto()",
+      "file_type": "code",
+      "source_file": "src\\screens\\AddPantryItemScreen.tsx",
+      "source_location": "L91",
+      "id": "addpantryitemscreen_takephoto",
+      "community": 6,
+      "norm_label": "takephoto()"
+    },
+    {
+      "label": "handleSubmit()",
+      "file_type": "code",
+      "source_file": "src\\screens\\AddPantryItemScreen.tsx",
+      "source_location": "L115",
+      "id": "addpantryitemscreen_handlesubmit",
+      "community": 6,
+      "norm_label": "handlesubmit()"
+    },
+    {
+      "label": "CreateEventScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_createeventscreen_tsx",
+      "community": 4,
+      "norm_label": "createeventscreen.tsx"
+    },
+    {
+      "label": "handleGetCurrentLocation()",
+      "file_type": "code",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L61",
+      "id": "createeventscreen_handlegetcurrentlocation",
+      "community": 4,
+      "norm_label": "handlegetcurrentlocation()"
+    },
+    {
+      "label": "updateAddress()",
+      "file_type": "code",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L84",
+      "id": "createeventscreen_updateaddress",
+      "community": 4,
+      "norm_label": "updateaddress()"
+    },
+    {
+      "label": "handleMapPress()",
+      "file_type": "code",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L97",
+      "id": "createeventscreen_handlemappress",
+      "community": 4,
+      "norm_label": "handlemappress()"
+    },
+    {
+      "label": "handlePickImage()",
+      "file_type": "code",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L103",
+      "id": "createeventscreen_handlepickimage",
+      "community": 4,
+      "norm_label": "handlepickimage()"
+    },
+    {
+      "label": "handleSave()",
+      "file_type": "code",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L116",
+      "id": "createeventscreen_handlesave",
+      "community": 4,
+      "norm_label": "handlesave()"
+    },
+    {
+      "label": "CreateSlotScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\CreateSlotScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_createslotscreen_tsx",
+      "community": 1,
+      "norm_label": "createslotscreen.tsx"
+    },
+    {
+      "label": "handleSubmit()",
+      "file_type": "code",
+      "source_file": "src\\screens\\CreateSlotScreen.tsx",
+      "source_location": "L60",
+      "id": "createslotscreen_handlesubmit",
+      "community": 1,
+      "norm_label": "handlesubmit()"
+    },
+    {
+      "label": "pickImage()",
+      "file_type": "code",
+      "source_file": "src\\screens\\CreateSlotScreen.tsx",
+      "source_location": "L150",
+      "id": "createslotscreen_pickimage",
+      "community": 1,
+      "norm_label": "pickimage()"
+    },
+    {
+      "label": "takePhoto()",
+      "file_type": "code",
+      "source_file": "src\\screens\\CreateSlotScreen.tsx",
+      "source_location": "L175",
+      "id": "createslotscreen_takephoto",
+      "community": 1,
+      "norm_label": "takephoto()"
+    },
+    {
+      "label": "DashboardScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\DashboardScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_dashboardscreen_tsx",
+      "community": 28,
+      "norm_label": "dashboardscreen.tsx"
+    },
+    {
+      "label": "EditProfileScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\EditProfileScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_editprofilescreen_tsx",
+      "community": 29,
+      "norm_label": "editprofilescreen.tsx"
+    },
+    {
+      "label": "EventDetailScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\EventDetailScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_eventdetailscreen_tsx",
+      "community": 7,
+      "norm_label": "eventdetailscreen.tsx"
+    },
+    {
+      "label": "loadEvent()",
+      "file_type": "code",
+      "source_file": "src\\screens\\EventDetailScreen.tsx",
+      "source_location": "L30",
+      "id": "eventdetailscreen_loadevent",
+      "community": 7,
+      "norm_label": "loadevent()"
+    },
+    {
+      "label": "handleJoin()",
+      "file_type": "code",
+      "source_file": "src\\screens\\EventDetailScreen.tsx",
+      "source_location": "L36",
+      "id": "eventdetailscreen_handlejoin",
+      "community": 7,
+      "norm_label": "handlejoin()"
+    },
+    {
+      "label": "index.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\index.tsx",
+      "source_location": "L1",
+      "id": "src_screens_index_tsx",
+      "community": 30,
+      "norm_label": "index.tsx"
+    },
+    {
+      "label": "LoginScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\LoginScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_loginscreen_tsx",
+      "community": 31,
+      "norm_label": "loginscreen.tsx"
+    },
+    {
+      "label": "LogoutScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\LogoutScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_logoutscreen_tsx",
+      "community": 32,
+      "norm_label": "logoutscreen.tsx"
+    },
+    {
+      "label": "OrdersScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\OrdersScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_ordersscreen_tsx",
+      "community": 8,
+      "norm_label": "ordersscreen.tsx"
+    },
+    {
+      "label": "handleStatusUpdate()",
+      "file_type": "code",
+      "source_file": "src\\screens\\OrdersScreen.tsx",
+      "source_location": "L77",
+      "id": "ordersscreen_handlestatusupdate",
+      "community": 8,
+      "norm_label": "handlestatusupdate()"
+    },
+    {
+      "label": "getItemsText()",
+      "file_type": "code",
+      "source_file": "src\\screens\\OrdersScreen.tsx",
+      "source_location": "L106",
+      "id": "ordersscreen_getitemstext",
+      "community": 8,
+      "norm_label": "getitemstext()"
+    },
+    {
+      "label": "PantryScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\PantryScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_pantryscreen_tsx",
+      "community": 33,
+      "norm_label": "pantryscreen.tsx"
+    },
+    {
+      "label": "ProfileScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\ProfileScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_profilescreen_tsx",
+      "community": 14,
+      "norm_label": "profilescreen.tsx"
+    },
+    {
+      "label": "getImageUrl()",
+      "file_type": "code",
+      "source_file": "src\\screens\\ProfileScreen.tsx",
+      "source_location": "L32",
+      "id": "profilescreen_getimageurl",
+      "community": 14,
+      "norm_label": "getimageurl()"
+    },
+    {
+      "label": "ProofUploadScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\ProofUploadScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_proofuploadscreen_tsx",
+      "community": 9,
+      "norm_label": "proofuploadscreen.tsx"
+    },
+    {
+      "label": "handleSubmitProof()",
+      "file_type": "code",
+      "source_file": "src\\screens\\ProofUploadScreen.tsx",
+      "source_location": "L43",
+      "id": "proofuploadscreen_handlesubmitproof",
+      "community": 9,
+      "norm_label": "handlesubmitproof()"
+    },
+    {
+      "label": "takePhoto()",
+      "file_type": "code",
+      "source_file": "src\\screens\\ProofUploadScreen.tsx",
+      "source_location": "L105",
+      "id": "proofuploadscreen_takephoto",
+      "community": 9,
+      "norm_label": "takephoto()"
+    },
+    {
+      "label": "RegisterStep1.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\RegisterStep1.tsx",
+      "source_location": "L1",
+      "id": "src_screens_registerstep1_tsx",
+      "community": 34,
+      "norm_label": "registerstep1.tsx"
+    },
+    {
+      "label": "RegisterStep2.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\RegisterStep2.tsx",
+      "source_location": "L1",
+      "id": "src_screens_registerstep2_tsx",
+      "community": 15,
+      "norm_label": "registerstep2.tsx"
+    },
+    {
+      "label": "async()",
+      "file_type": "code",
+      "source_file": "src\\screens\\RegisterStep2.tsx",
+      "source_location": "L251",
+      "id": "registerstep2_async",
+      "community": 15,
+      "norm_label": "async()"
+    },
+    {
+      "label": "RegisterStep3.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\RegisterStep3.tsx",
+      "source_location": "L1",
+      "id": "src_screens_registerstep3_tsx",
+      "community": 35,
+      "norm_label": "registerstep3.tsx"
+    },
+    {
+      "label": "RegistrationStatusScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\RegistrationStatusScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_registrationstatusscreen_tsx",
+      "community": 36,
+      "norm_label": "registrationstatusscreen.tsx"
+    },
+    {
+      "label": "ScheduleScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\ScheduleScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_schedulescreen_tsx",
+      "community": 16,
+      "norm_label": "schedulescreen.tsx"
+    },
+    {
+      "label": "getImageUrl()",
+      "file_type": "code",
+      "source_file": "src\\screens\\ScheduleScreen.tsx",
+      "source_location": "L86",
+      "id": "schedulescreen_getimageurl",
+      "community": 16,
+      "norm_label": "getimageurl()"
+    },
+    {
+      "label": "SocialEventsScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\SocialEventsScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_socialeventsscreen_tsx",
+      "community": 10,
+      "norm_label": "socialeventsscreen.tsx"
+    },
+    {
+      "label": "onRefresh()",
+      "file_type": "code",
+      "source_file": "src\\screens\\SocialEventsScreen.tsx",
+      "source_location": "L29",
+      "id": "socialeventsscreen_onrefresh",
+      "community": 10,
+      "norm_label": "onrefresh()"
+    },
+    {
+      "label": "handleCreateEvent()",
+      "file_type": "code",
+      "source_file": "src\\screens\\SocialEventsScreen.tsx",
+      "source_location": "L35",
+      "id": "socialeventsscreen_handlecreateevent",
+      "community": 10,
+      "norm_label": "handlecreateevent()"
+    },
+    {
+      "label": "VerificationScreen.tsx",
+      "file_type": "code",
+      "source_file": "src\\screens\\VerificationScreen.tsx",
+      "source_location": "L1",
+      "id": "src_screens_verificationscreen_tsx",
+      "community": 37,
+      "norm_label": "verificationscreen.tsx"
+    },
+    {
+      "label": "index.ts",
+      "file_type": "code",
+      "source_file": "src\\theme\\index.ts",
+      "source_location": "L1",
+      "id": "src_theme_index_ts",
+      "community": 38,
+      "norm_label": "index.ts"
+    },
+    {
+      "label": "dateTime.ts",
+      "file_type": "code",
+      "source_file": "src\\utils\\dateTime.ts",
+      "source_location": "L1",
+      "id": "src_utils_datetime_ts",
+      "community": 1,
+      "norm_label": "datetime.ts"
+    },
+    {
+      "label": "getMealSlot()",
+      "file_type": "code",
+      "source_file": "src\\utils\\dateTime.ts",
+      "source_location": "L15",
+      "id": "datetime_getmealslot",
+      "community": 1,
+      "norm_label": "getmealslot()"
+    },
+    {
+      "label": "normalizeSlot()",
+      "file_type": "code",
+      "source_file": "src\\utils\\dateTime.ts",
+      "source_location": "L44",
+      "id": "datetime_normalizeslot",
+      "community": 1,
+      "norm_label": "normalizeslot()"
+    },
+    {
+      "label": "GoHomey Chef App Icon",
+      "file_type": "image",
+      "source_file": "assets/icon.png",
+      "id": "icon_app_icon",
+      "community": 17,
+      "norm_label": "gohomey chef app icon"
+    },
+    {
+      "label": "GoHomey Chef Splash Icon",
+      "file_type": "image",
+      "source_file": "assets/splash-icon.png",
+      "id": "splash_splash_icon",
+      "community": 17,
+      "norm_label": "gohomey chef splash icon"
+    },
+    {
+      "label": "Lamb Chops Main Course",
+      "file_type": "image",
+      "source_file": "src/assets/images/lamb_chops.png",
+      "id": "lamb_chops_lamb_chops_dish",
+      "community": 18,
+      "norm_label": "lamb chops main course"
+    },
+    {
+      "label": "Parmesan Risotto Side Dish",
+      "file_type": "image",
+      "source_file": "src/assets/images/risotto.png",
+      "id": "risotto_risotto_dish",
+      "community": 18,
+      "norm_label": "parmesan risotto side dish"
+    }
+  ],
+  "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L8",
+      "weight": 1.0,
+      "_src": "app_tsx",
+      "_tgt": "app_app",
+      "source": "app_tsx",
+      "target": "app_app",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainActivity.kt",
+      "source_location": "L13",
+      "weight": 1.0,
+      "_src": "android_app_src_main_java_com_anonymous_gohomeychef_mainactivity_kt",
+      "_tgt": "mainactivity_mainactivity",
+      "source": "android_app_src_main_java_com_anonymous_gohomeychef_mainactivity_kt",
+      "target": "mainactivity_mainactivity",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainActivity.kt",
+      "source_location": "L14",
+      "weight": 1.0,
+      "_src": "mainactivity_mainactivity",
+      "_tgt": "mainactivity_mainactivity_oncreate",
+      "source": "mainactivity_mainactivity",
+      "target": "mainactivity_mainactivity_oncreate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainActivity.kt",
+      "source_location": "L26",
+      "weight": 1.0,
+      "_src": "mainactivity_mainactivity",
+      "_tgt": "mainactivity_mainactivity_getmaincomponentname",
+      "source": "mainactivity_mainactivity",
+      "target": "mainactivity_mainactivity_getmaincomponentname",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainActivity.kt",
+      "source_location": "L32",
+      "weight": 1.0,
+      "_src": "mainactivity_mainactivity",
+      "_tgt": "mainactivity_mainactivity_createreactactivitydelegate",
+      "source": "mainactivity_mainactivity",
+      "target": "mainactivity_mainactivity_createreactactivitydelegate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainActivity.kt",
+      "source_location": "L48",
+      "weight": 1.0,
+      "_src": "mainactivity_mainactivity",
+      "_tgt": "mainactivity_mainactivity_invokedefaultonbackpressed",
+      "source": "mainactivity_mainactivity",
+      "target": "mainactivity_mainactivity_invokedefaultonbackpressed",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L19",
+      "weight": 1.0,
+      "_src": "android_app_src_main_java_com_anonymous_gohomeychef_mainapplication_kt",
+      "_tgt": "mainapplication_mainapplication",
+      "source": "android_app_src_main_java_com_anonymous_gohomeychef_mainapplication_kt",
+      "target": "mainapplication_mainapplication",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L24",
+      "weight": 1.0,
+      "_src": "android_app_src_main_java_com_anonymous_gohomeychef_mainapplication_kt",
+      "_tgt": "mainapplication_getpackages",
+      "source": "android_app_src_main_java_com_anonymous_gohomeychef_mainapplication_kt",
+      "target": "mainapplication_getpackages",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L30",
+      "weight": 1.0,
+      "_src": "android_app_src_main_java_com_anonymous_gohomeychef_mainapplication_kt",
+      "_tgt": "mainapplication_getjsmainmodulename",
+      "source": "android_app_src_main_java_com_anonymous_gohomeychef_mainapplication_kt",
+      "target": "mainapplication_getjsmainmodulename",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L32",
+      "weight": 1.0,
+      "_src": "android_app_src_main_java_com_anonymous_gohomeychef_mainapplication_kt",
+      "_tgt": "mainapplication_getusedevelopersupport",
+      "source": "android_app_src_main_java_com_anonymous_gohomeychef_mainapplication_kt",
+      "target": "mainapplication_getusedevelopersupport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L41",
+      "weight": 1.0,
+      "_src": "mainapplication_mainapplication",
+      "_tgt": "mainapplication_mainapplication_oncreate",
+      "source": "mainapplication_mainapplication",
+      "target": "mainapplication_mainapplication_oncreate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "android\\app\\src\\main\\java\\com\\anonymous\\gohomeychef\\MainApplication.kt",
+      "source_location": "L52",
+      "weight": 1.0,
+      "_src": "mainapplication_mainapplication",
+      "_tgt": "mainapplication_mainapplication_onconfigurationchanged",
+      "source": "mainapplication_mainapplication",
+      "target": "mainapplication_mainapplication_onconfigurationchanged",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\components\\ChefTip.tsx",
+      "source_location": "L10",
+      "weight": 1.0,
+      "_src": "src_components_cheftip_tsx",
+      "_tgt": "cheftip_cheftip",
+      "source": "src_components_cheftip_tsx",
+      "target": "cheftip_cheftip",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\components\\OrderCard.tsx",
+      "source_location": "L31",
+      "weight": 1.0,
+      "_src": "src_components_ordercard_tsx",
+      "_tgt": "ordercard_getstatuscolor",
+      "source": "src_components_ordercard_tsx",
+      "target": "ordercard_getstatuscolor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\components\\OrderCard.tsx",
+      "source_location": "L42",
+      "weight": 1.0,
+      "_src": "src_components_ordercard_tsx",
+      "_tgt": "ordercard_getstatusbg",
+      "source": "src_components_ordercard_tsx",
+      "target": "ordercard_getstatusbg",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\components\\OrderCard.tsx",
+      "source_location": "L47",
+      "weight": 1.0,
+      "_src": "src_components_ordercard_tsx",
+      "_tgt": "ordercard_getactionlabel",
+      "source": "src_components_ordercard_tsx",
+      "target": "ordercard_getactionlabel",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\components\\OrderCard.tsx",
+      "source_location": "L43",
+      "weight": 1.0,
+      "_src": "ordercard_getstatusbg",
+      "_tgt": "ordercard_getstatuscolor",
+      "source": "ordercard_getstatuscolor",
+      "target": "ordercard_getstatusbg",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\components\\StatusModal.tsx",
+      "source_location": "L36",
+      "weight": 1.0,
+      "_src": "src_components_statusmodal_tsx",
+      "_tgt": "statusmodal_successanimation",
+      "source": "src_components_statusmodal_tsx",
+      "target": "statusmodal_successanimation",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\context\\AuthContext.tsx",
+      "source_location": "L39",
+      "weight": 1.0,
+      "_src": "src_context_authcontext_tsx",
+      "_tgt": "authcontext_authprovider",
+      "source": "src_context_authcontext_tsx",
+      "target": "authcontext_authprovider",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\context\\AuthContext.tsx",
+      "source_location": "L130",
+      "weight": 1.0,
+      "_src": "src_context_authcontext_tsx",
+      "_tgt": "authcontext_useauth",
+      "source": "src_context_authcontext_tsx",
+      "target": "authcontext_useauth",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "src\\context\\SocialContext.tsx",
+      "source_location": "L55",
+      "weight": 1.0,
+      "_src": "socialcontext_socialprovider",
+      "_tgt": "authcontext_useauth",
+      "source": "authcontext_useauth",
+      "target": "socialcontext_socialprovider"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\context\\SocialContext.tsx",
+      "source_location": "L51",
+      "weight": 1.0,
+      "_src": "src_context_socialcontext_tsx",
+      "_tgt": "socialcontext_socialprovider",
+      "source": "src_context_socialcontext_tsx",
+      "target": "socialcontext_socialprovider",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\context\\SocialContext.tsx",
+      "source_location": "L174",
+      "weight": 1.0,
+      "_src": "src_context_socialcontext_tsx",
+      "_tgt": "socialcontext_usesocial",
+      "source": "src_context_socialcontext_tsx",
+      "target": "socialcontext_usesocial",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\AddPantryItemScreen.tsx",
+      "source_location": "L66",
+      "weight": 1.0,
+      "_src": "src_screens_addpantryitemscreen_tsx",
+      "_tgt": "addpantryitemscreen_pickimage",
+      "source": "src_screens_addpantryitemscreen_tsx",
+      "target": "addpantryitemscreen_pickimage",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\AddPantryItemScreen.tsx",
+      "source_location": "L91",
+      "weight": 1.0,
+      "_src": "src_screens_addpantryitemscreen_tsx",
+      "_tgt": "addpantryitemscreen_takephoto",
+      "source": "src_screens_addpantryitemscreen_tsx",
+      "target": "addpantryitemscreen_takephoto",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\AddPantryItemScreen.tsx",
+      "source_location": "L115",
+      "weight": 1.0,
+      "_src": "src_screens_addpantryitemscreen_tsx",
+      "_tgt": "addpantryitemscreen_handlesubmit",
+      "source": "src_screens_addpantryitemscreen_tsx",
+      "target": "addpantryitemscreen_handlesubmit",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L61",
+      "weight": 1.0,
+      "_src": "src_screens_createeventscreen_tsx",
+      "_tgt": "createeventscreen_handlegetcurrentlocation",
+      "source": "src_screens_createeventscreen_tsx",
+      "target": "createeventscreen_handlegetcurrentlocation",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L84",
+      "weight": 1.0,
+      "_src": "src_screens_createeventscreen_tsx",
+      "_tgt": "createeventscreen_updateaddress",
+      "source": "src_screens_createeventscreen_tsx",
+      "target": "createeventscreen_updateaddress",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L97",
+      "weight": 1.0,
+      "_src": "src_screens_createeventscreen_tsx",
+      "_tgt": "createeventscreen_handlemappress",
+      "source": "src_screens_createeventscreen_tsx",
+      "target": "createeventscreen_handlemappress",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L103",
+      "weight": 1.0,
+      "_src": "src_screens_createeventscreen_tsx",
+      "_tgt": "createeventscreen_handlepickimage",
+      "source": "src_screens_createeventscreen_tsx",
+      "target": "createeventscreen_handlepickimage",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L116",
+      "weight": 1.0,
+      "_src": "src_screens_createeventscreen_tsx",
+      "_tgt": "createeventscreen_handlesave",
+      "source": "src_screens_createeventscreen_tsx",
+      "target": "createeventscreen_handlesave",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L76",
+      "weight": 1.0,
+      "_src": "createeventscreen_handlegetcurrentlocation",
+      "_tgt": "createeventscreen_updateaddress",
+      "source": "createeventscreen_handlegetcurrentlocation",
+      "target": "createeventscreen_updateaddress",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\CreateEventScreen.tsx",
+      "source_location": "L100",
+      "weight": 1.0,
+      "_src": "createeventscreen_handlemappress",
+      "_tgt": "createeventscreen_updateaddress",
+      "source": "createeventscreen_updateaddress",
+      "target": "createeventscreen_handlemappress",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\CreateSlotScreen.tsx",
+      "source_location": "L60",
+      "weight": 1.0,
+      "_src": "src_screens_createslotscreen_tsx",
+      "_tgt": "createslotscreen_handlesubmit",
+      "source": "src_screens_createslotscreen_tsx",
+      "target": "createslotscreen_handlesubmit",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\CreateSlotScreen.tsx",
+      "source_location": "L150",
+      "weight": 1.0,
+      "_src": "src_screens_createslotscreen_tsx",
+      "_tgt": "createslotscreen_pickimage",
+      "source": "src_screens_createslotscreen_tsx",
+      "target": "createslotscreen_pickimage",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\CreateSlotScreen.tsx",
+      "source_location": "L175",
+      "weight": 1.0,
+      "_src": "src_screens_createslotscreen_tsx",
+      "_tgt": "createslotscreen_takephoto",
+      "source": "src_screens_createslotscreen_tsx",
+      "target": "createslotscreen_takephoto",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "src\\screens\\CreateSlotScreen.tsx",
+      "source_location": "L75",
+      "weight": 1.0,
+      "_src": "createslotscreen_handlesubmit",
+      "_tgt": "datetime_normalizeslot",
+      "source": "createslotscreen_handlesubmit",
+      "target": "datetime_normalizeslot"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\EventDetailScreen.tsx",
+      "source_location": "L30",
+      "weight": 1.0,
+      "_src": "src_screens_eventdetailscreen_tsx",
+      "_tgt": "eventdetailscreen_loadevent",
+      "source": "src_screens_eventdetailscreen_tsx",
+      "target": "eventdetailscreen_loadevent",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\EventDetailScreen.tsx",
+      "source_location": "L36",
+      "weight": 1.0,
+      "_src": "src_screens_eventdetailscreen_tsx",
+      "_tgt": "eventdetailscreen_handlejoin",
+      "source": "src_screens_eventdetailscreen_tsx",
+      "target": "eventdetailscreen_handlejoin",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\OrdersScreen.tsx",
+      "source_location": "L77",
+      "weight": 1.0,
+      "_src": "src_screens_ordersscreen_tsx",
+      "_tgt": "ordersscreen_handlestatusupdate",
+      "source": "src_screens_ordersscreen_tsx",
+      "target": "ordersscreen_handlestatusupdate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\OrdersScreen.tsx",
+      "source_location": "L106",
+      "weight": 1.0,
+      "_src": "src_screens_ordersscreen_tsx",
+      "_tgt": "ordersscreen_getitemstext",
+      "source": "src_screens_ordersscreen_tsx",
+      "target": "ordersscreen_getitemstext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\ProfileScreen.tsx",
+      "source_location": "L32",
+      "weight": 1.0,
+      "_src": "src_screens_profilescreen_tsx",
+      "_tgt": "profilescreen_getimageurl",
+      "source": "src_screens_profilescreen_tsx",
+      "target": "profilescreen_getimageurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\ProofUploadScreen.tsx",
+      "source_location": "L43",
+      "weight": 1.0,
+      "_src": "src_screens_proofuploadscreen_tsx",
+      "_tgt": "proofuploadscreen_handlesubmitproof",
+      "source": "src_screens_proofuploadscreen_tsx",
+      "target": "proofuploadscreen_handlesubmitproof",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\ProofUploadScreen.tsx",
+      "source_location": "L105",
+      "weight": 1.0,
+      "_src": "src_screens_proofuploadscreen_tsx",
+      "_tgt": "proofuploadscreen_takephoto",
+      "source": "src_screens_proofuploadscreen_tsx",
+      "target": "proofuploadscreen_takephoto",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\RegisterStep2.tsx",
+      "source_location": "L251",
+      "weight": 1.0,
+      "_src": "src_screens_registerstep2_tsx",
+      "_tgt": "registerstep2_async",
+      "source": "src_screens_registerstep2_tsx",
+      "target": "registerstep2_async",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\ScheduleScreen.tsx",
+      "source_location": "L86",
+      "weight": 1.0,
+      "_src": "src_screens_schedulescreen_tsx",
+      "_tgt": "schedulescreen_getimageurl",
+      "source": "src_screens_schedulescreen_tsx",
+      "target": "schedulescreen_getimageurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\SocialEventsScreen.tsx",
+      "source_location": "L29",
+      "weight": 1.0,
+      "_src": "src_screens_socialeventsscreen_tsx",
+      "_tgt": "socialeventsscreen_onrefresh",
+      "source": "src_screens_socialeventsscreen_tsx",
+      "target": "socialeventsscreen_onrefresh",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\screens\\SocialEventsScreen.tsx",
+      "source_location": "L35",
+      "weight": 1.0,
+      "_src": "src_screens_socialeventsscreen_tsx",
+      "_tgt": "socialeventsscreen_handlecreateevent",
+      "source": "src_screens_socialeventsscreen_tsx",
+      "target": "socialeventsscreen_handlecreateevent",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\utils\\dateTime.ts",
+      "source_location": "L15",
+      "weight": 1.0,
+      "_src": "src_utils_datetime_ts",
+      "_tgt": "datetime_getmealslot",
+      "source": "src_utils_datetime_ts",
+      "target": "datetime_getmealslot",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src\\utils\\dateTime.ts",
+      "source_location": "L44",
+      "weight": 1.0,
+      "_src": "src_utils_datetime_ts",
+      "_tgt": "datetime_normalizeslot",
+      "source": "src_utils_datetime_ts",
+      "target": "datetime_normalizeslot",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "visual_style_consistency",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "_src": "icon_app_icon",
+      "_tgt": "splash_splash_icon",
+      "source": "icon_app_icon",
+      "target": "splash_splash_icon"
+    },
+    {
+      "relation": "likely_paired_recipe",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "_src": "lamb_chops_lamb_chops_dish",
+      "_tgt": "risotto_risotto_dish",
+      "source": "lamb_chops_lamb_chops_dish",
+      "target": "risotto_risotto_dish"
+    }
+  ],
+  "hyperedges": []
+}
