@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors, Spacing, Typography } from '../theme';
 import { MapPin, Clock, ChevronRight } from 'lucide-react-native';
 
-export type OrderStatus = 'RECEIVED' | 'COOKING' | 'READY_FOR_PICKUP' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY_FOR_PICKUP' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED' | 'REFUNDED';
 
 interface OrderCardProps {
   orderId: string;
@@ -12,7 +12,7 @@ interface OrderCardProps {
   deliveryTime: string;
   location: string;
   onPress?: () => void;
-  onActionPress?: () => void;
+  onActionPress?: (status: OrderStatus) => void;
 }
 
 export const OrderCard: React.FC<OrderCardProps> = ({
@@ -24,17 +24,21 @@ export const OrderCard: React.FC<OrderCardProps> = ({
   onPress,
   onActionPress,
 }) => {
-    const isCooking = status === 'COOKING';
-  const isReceived = status === 'RECEIVED';
-  const isReady = status === 'READY_FOR_PICKUP';
+    const isPending = status === 'PENDING';
+    const isConfirmed = status === 'CONFIRMED';
+    const isPreparing = status === 'PREPARING';
+    const isReady = status === 'READY_FOR_PICKUP';
 
   const getStatusColor = () => {
     switch(status) {
-      case 'RECEIVED': return Colors.cyan;
-      case 'COOKING': return Colors.warning;
+      case 'PENDING': return Colors.warning; // yellow for attention
+      case 'CONFIRMED': return Colors.cyan;
+      case 'PREPARING': return Colors.warning;
       case 'READY_FOR_PICKUP': return Colors.primary;
+      case 'OUT_FOR_DELIVERY': return Colors.primaryDark;
       case 'DELIVERED': return Colors.primaryDark;
       case 'CANCELLED': return Colors.danger;
+      case 'REFUNDED': return '#9333EA'; // Purple
       default: return Colors.textSecondary;
     }
   };
@@ -45,8 +49,9 @@ export const OrderCard: React.FC<OrderCardProps> = ({
   };
 
   const getActionLabel = () => {
-    if (isReceived) return 'START COOKING';
-    if (isCooking) return 'MARK AS READY';
+    if (isPending) return 'ACCEPT';
+    if (isConfirmed) return 'START PREPARING';
+    if (isPreparing) return 'MARK AS READY';
     if (isReady) return 'WAITING FOR PICKUP';
     return status.replace(/_/g, ' ');
   };
@@ -90,26 +95,41 @@ export const OrderCard: React.FC<OrderCardProps> = ({
         </View>
       </View>
 
-      {(isReceived || isCooking || isReady) && (
-        <TouchableOpacity 
-          style={[
-            styles.actionButton, 
-            { 
-              backgroundColor: (isReceived || isCooking) ? Colors.primary : Colors.surface,
-              borderColor: (isReceived || isCooking) ? Colors.primary : Colors.border
-            }
-          ]} 
-          onPress={onActionPress}
-          disabled={isReady} // Ready for pickup is just a status, doesn't need action from chef here
-        >
-          <Text style={[
-            styles.actionButtonText, 
-            { color: (isReceived || isCooking) ? Colors.background : Colors.primary }
-          ]}>
-            {getActionLabel()}
-          </Text>
-          {(isReceived || isCooking) && <ChevronRight size={18} color={Colors.background} />}
-        </TouchableOpacity>
+      {(isPending || isConfirmed || isPreparing || isReady) && (
+        <View style={styles.actionRow}>
+          {isPending && (
+            <TouchableOpacity 
+              style={[styles.smallActionBtn, styles.cancelBtn]} 
+              onPress={() => onActionPress?.('CANCELLED')}
+            >
+              <Text style={styles.cancelBtnText}>REJECT</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity 
+            style={[
+              styles.actionButton, 
+              isPending && { flex: 2 },
+              { 
+                backgroundColor: (isPending || isConfirmed || isPreparing) ? Colors.primary : Colors.surface,
+                borderColor: (isPending || isConfirmed || isPreparing) ? Colors.primary : Colors.border
+              }
+            ]} 
+            onPress={() => {
+              if (isPending) onActionPress?.('CONFIRMED');
+              else if (isConfirmed) onActionPress?.('PREPARING');
+              else if (isPreparing) onActionPress?.('READY_FOR_PICKUP');
+            }}
+            disabled={isReady}
+          >
+            <Text style={[
+              styles.actionButtonText, 
+              { color: (isPending || isConfirmed || isPreparing) ? Colors.background : Colors.primary }
+            ]}>
+              {getActionLabel()}
+            </Text>
+            {(isPending || isConfirmed || isPreparing) && <ChevronRight size={18} color={Colors.background} />}
+          </TouchableOpacity>
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -175,14 +195,35 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     marginLeft: 6,
   },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  smallActionBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  cancelBtn: {
+    borderColor: Colors.danger,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  cancelBtnText: {
+    color: Colors.danger,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
   actionButton: {
+    flex: 1,
     height: 48,
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     borderWidth: 1,
-    borderColor: Colors.primary,
   },
   actionButtonText: {
     fontWeight: 'bold',

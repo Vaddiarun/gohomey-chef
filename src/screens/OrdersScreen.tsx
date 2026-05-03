@@ -53,7 +53,7 @@ export const OrdersScreen = () => {
         // Filter orders based on active tab
         const filtered = allOrders.filter((order: any) => {
           if (activeTab === 'Active') {
-            return ['RECEIVED', 'COOKING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(order.status);
+            return ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(order.status);
           } else {
             return ['DELIVERED', 'CANCELLED'].includes(order.status);
           }
@@ -104,7 +104,10 @@ export const OrdersScreen = () => {
   };
 
   const getItemsText = (items: any[]) => {
-    return items.map(item => `${item.quantity}x ${item.meal_name}`).join(', ');
+    return items.map(item => {
+      const name = item.daily_meal?.meal_name || item.pantry_item?.name || 'Unknown Item';
+      return `${item.quantity}x ${name}`;
+    }).join(', ');
   };
 
   return (
@@ -161,9 +164,10 @@ export const OrdersScreen = () => {
                     status={order.status}
                     deliveryTime={new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     location={order.user?.name || 'Customer'}
-                    onActionPress={() => {
-                      if (order.status === 'RECEIVED') handleStatusUpdate(order.id, 'COOKING');
-                      else if (order.status === 'COOKING') handleStatusUpdate(order.id, 'READY_FOR_PICKUP');
+                    onActionPress={(newStatus?: string) => {
+                      if (newStatus) {
+                        handleStatusUpdate(order.id, newStatus);
+                      }
                     }}
                   />
                 ))}
