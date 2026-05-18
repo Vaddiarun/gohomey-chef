@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
-import { ShoppingBag, User, Utensils, Calendar, LayoutGrid, ClipboardList, Bell, ChevronLeft, Package, Users } from 'lucide-react-native';
+import { ShoppingBag, User, Utensils, LayoutGrid, ClipboardList, Package, Users } from 'lucide-react-native';
 import { View, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { Colors, Typography } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -61,7 +61,6 @@ function TabNavigator() {
           if (route.name === 'Dashboard') IconComponent = LayoutGrid;
           else if (route.name === 'Orders') IconComponent = ClipboardList;
           else if (route.name === 'Pantry') IconComponent = Package;
-          else if (route.name === 'Manage') IconComponent = Calendar;
           else if (route.name === 'Social') IconComponent = Users;
           else if (route.name === 'Profile') IconComponent = User;
           else IconComponent = LayoutGrid;
@@ -88,34 +87,6 @@ function TabNavigator() {
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="Orders" component={OrdersScreen} />
       <Tab.Screen name="Pantry" component={PantryScreen} />
-      <Tab.Screen
-        name="Manage" 
-        component={ScheduleScreen} 
-        options={({ navigation }) => ({
-          headerShown: true,
-          headerTitle: 'Schedule',
-          headerStyle: { backgroundColor: Colors.background },
-          headerTintColor: Colors.text,
-          headerTitleStyle: { fontWeight: 'bold' as const, color: Colors.text, fontSize: 18 },
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginLeft: 16 }}>
-              <ChevronLeft size={24} color={Colors.primary} />
-            </TouchableOpacity>
-          ),
-          headerRight: () => (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16 }}>
-              <TouchableOpacity style={{ marginRight: 16 }}>
-                <Bell size={20} color={Colors.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                   <User size={18} color={Colors.primary} />
-                </View>
-              </TouchableOpacity>
-            </View>
-          ),
-        })}
-      />
       <Tab.Screen name="Social" component={SocialEventsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>

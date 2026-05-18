@@ -11,18 +11,27 @@ interface EventCardProps {
   onPress: () => void;
 }
 
+const resolveImage = (event: SocialEvent) => {
+  // image_url is often a local device file:// path (never uploaded) — skip it
+  const url = event.image_url;
+  if (url && url.startsWith('http')) return { uri: url };
+  // Fall back to chef's kitchen photo which is always a real server URL
+  if (event.chef?.kitchen_photo_url) return { uri: event.chef.kitchen_photo_url };
+  return { uri: 'https://via.placeholder.com/400x200' };
+};
+
 export const EventCard = ({ event, onPress }: EventCardProps) => {
   const bookedCount = (event as any).slots_booked || 0;
   const isFull = bookedCount >= event.slots_total;
 
   return (
-    <TouchableOpacity 
-      style={styles.container} 
+    <TouchableOpacity
+      style={styles.container}
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <Image 
-        source={{ uri: event.image_url || 'https://via.placeholder.com/400x200' }} 
+      <Image
+        source={resolveImage(event)}
         style={styles.image}
         resizeMode="cover"
       />

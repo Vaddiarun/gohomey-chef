@@ -34,6 +34,13 @@ export const EventDetailScreen = ({ route, navigation }: any) => {
 
 
 
+  const getImageUrl = () => {
+    const url = event?.image_url;
+    if (url && url.startsWith('http')) return { uri: url };
+    if (event?.chef?.kitchen_photo_url) return { uri: event.chef.kitchen_photo_url };
+    return { uri: 'https://via.placeholder.com/800x400' };
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -56,8 +63,8 @@ export const EventDetailScreen = ({ route, navigation }: any) => {
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.imageContainer}>
-        <Image 
-          source={{ uri: event.image_url || 'https://via.placeholder.com/800x400' }} 
+        <Image
+          source={getImageUrl()}
           style={styles.image}
         />
         <TouchableOpacity 

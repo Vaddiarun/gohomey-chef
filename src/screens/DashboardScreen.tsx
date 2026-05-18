@@ -312,17 +312,6 @@ export const DashboardScreen = () => {
                 <ChevronRight size={16} color={Colors.primary} />
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={styles.manageBtn}
-                onPress={() => {
-                  console.log('Navigating to Manage Tab...');
-                  navigation.navigate('Manage' as any);
-                }}
-              >
-                <Calendar size={16} color={Colors.primary} />
-                <Text style={styles.manageBtnText}>Manage Full Schedule</Text>
-                <ChevronRight size={16} color={Colors.primary} />
-              </TouchableOpacity>
             </View>
 
             {/* Active Slots Section */}

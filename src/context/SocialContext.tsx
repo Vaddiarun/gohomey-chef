@@ -13,6 +13,11 @@ export type SocialEvent = {
   social_balance: boolean;
   image_url: string;
   creator_id: string;
+  chef?: {
+    kitchen_photo_url?: string;
+    name?: string;
+    kitchen_name?: string;
+  };
 };
 
 export type DashboardStats = {

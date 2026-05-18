@@ -14,6 +14,14 @@ interface PantryCardProps {
   onDelete: (id: string) => void;
 }
 
+const getImageUrl = (url?: string) => {
+  if (!url || url.startsWith('file://')) return null;
+  if (url.startsWith('http')) return { uri: url };
+  const base = (process.env.EXPO_PUBLIC_API_URL ?? '').replace('/api/v1/', '').replace(/\/$/, '');
+  const path = url.startsWith('/') ? url : `/${url}`;
+  return { uri: `${base}${path}` };
+};
+
 export const PantryCard: React.FC<PantryCardProps> = ({
   id,
   name,
@@ -26,13 +34,15 @@ export const PantryCard: React.FC<PantryCardProps> = ({
 }) => {
   const isLowStock = inventory <= 5;
   const isOutOfStock = inventory === 0;
+  const imageSource = getImageUrl(image_url);
+  const [imgError, setImgError] = React.useState(false);
 
   return (
     <View style={styles.container}>
       {/* Image Section */}
       <View style={styles.imageContainer}>
-        {image_url ? (
-          <Image source={{ uri: image_url }} style={styles.image} />
+        {imageSource && !imgError ? (
+          <Image source={imageSource} style={styles.image} onError={() => setImgError(true)} />
         ) : (
           <View style={styles.imagePlaceholder}>
             <Package size={28} color={Colors.primary} />
