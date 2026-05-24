@@ -96,9 +96,9 @@ export const VerificationScreen = ({ navigation, route }: any) => {
         return;
       }
 
-      if (status === 'DRAFT') {
-        console.log('Navigation: DRAFT chef, heading to Step', step);
-        // Scenario B: Returning Chef (Incomplete Registration)
+      if (status === 'DRAFT' || (isNewUser && !status)) {
+        console.log('Navigation: DRAFT/new chef, heading to Step', step);
+        // Scenario B: Returning Chef (Incomplete Registration) or new user
         if (step === 2) {
           navigation.navigate('RegisterStep2', { token, phoneNumber });
         } else if (step === 3) {
@@ -110,7 +110,7 @@ export const VerificationScreen = ({ navigation, route }: any) => {
       }
 
       // Default: Scenario C: Returning Chef (Review Process)
-      // Covers PENDING_REVIEW, PHONE_VETTING, KITCHEN_AUDIT, REJECTED, or APPROVED with redirectToStatus
+      // Covers PENDING_REVIEW, PHONE_VETTING, KITCHEN_AUDIT, REJECTED
       console.log('Navigation: STATUS screen, status:', status, 'redirectToStatus:', redirectToStatus);
       navigation.navigate('RegistrationStatus', { status, token });
     } catch (error: any) {
