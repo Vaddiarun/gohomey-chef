@@ -19,6 +19,7 @@ import {
   ChevronRight
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
+import { resolveImageSource } from '../utils/media';
 
 export const ProfileScreen = () => {
   const navigation = useNavigation<any>();
@@ -37,11 +38,7 @@ export const ProfileScreen = () => {
       console.log('Chef Profile:', JSON.stringify(user, null, 2));
     }
   }, [user]);
-  const getImageUrl = (url?: string) => {
-    if (!url) return undefined;
-    if (url.startsWith('http')) return { uri: url };
-    return { uri: `${process.env.EXPO_PUBLIC_API_URL.replace('/api/v1/', '')}${url}` };
-  };
+  const getImageUrl = (url?: string) => resolveImageSource(url) ?? undefined;
 
   const menuItems = [
     { id: '1', title: 'Edit Profile', subtitle: 'Manage personal info & avatar', icon: User, color: Colors.primary },

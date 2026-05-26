@@ -5,6 +5,7 @@ import { Colors, Spacing, Typography } from '../theme';
 import { SlotProgress } from './SlotProgress';
 import { SocialEvent } from '../context/SocialContext';
 import { format } from 'date-fns';
+import { resolveImageSource } from '../utils/media';
 
 interface EventCardProps {
   event: SocialEvent;
@@ -13,10 +14,11 @@ interface EventCardProps {
 
 const resolveImage = (event: SocialEvent) => {
   // image_url is often a local device file:// path (never uploaded) — skip it
-  const url = event.image_url;
-  if (url && url.startsWith('http')) return { uri: url };
+  const imageSource = resolveImageSource(event.image_url);
+  if (imageSource) return imageSource;
   // Fall back to chef's kitchen photo which is always a real server URL
-  if (event.chef?.kitchen_photo_url) return { uri: event.chef.kitchen_photo_url };
+  const kitchenPhotoSource = resolveImageSource(event.chef?.kitchen_photo_url);
+  if (kitchenPhotoSource) return kitchenPhotoSource;
   return { uri: 'https://via.placeholder.com/400x200' };
 };
 

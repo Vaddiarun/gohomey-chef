@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,9 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Image,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography } from '../theme';
@@ -17,17 +17,39 @@ import {
   MapPin,
   Utensils,
   ArrowRight,
+  Plus,
+  X,
+  Check,
 } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
 import MapView, { Marker, Region } from '../components/PlatformMap';
 import { LocationSearchInput } from '../components/LocationSearchInput';
 import * as Location from 'expo-location';
 
+const PRESET_APPLIANCES = [
+  'OVEN',
+  'MICROWAVE',
+  'REFRIGERATOR',
+  'FREEZER',
+  'DISHWASHER',
+  'BLENDER',
+  'MIXER',
+  'FOOD PROCESSOR',
+  'SOUS-VIDE',
+  'AIR FRYER',
+  'CONVECTION OVEN',
+  'PRESSURE COOKER',
+  'INDUCTION',
+  'GAS STOVE',
+];
+
 export const RegisterStep2 = ({ navigation, route }: any) => {
   const [kitchenName, setKitchenName] = useState('');
   const [capacity, setCapacity] = useState('12');
-  const [appliances, setAppliances] = useState(['SOUS-VIDE', 'CONVECTION']);
+  const [appliances, setAppliances] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [newAppliance, setNewAppliance] = useState('');
+  const inputRef = useRef<TextInput>(null);
 
   const [region, setRegion] = useState<Region>({
     latitude: 17.385,
@@ -44,6 +66,21 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
 
   const email = route?.params?.email;
   const token = route?.params?.token;
+
+  const toggleAppliance = (item: string) => {
+    setAppliances(prev =>
+      prev.includes(item) ? prev.filter(a => a !== item) : [...prev, item]
+    );
+  };
+
+  const addCustomAppliance = () => {
+    const trimmed = newAppliance.trim().toUpperCase();
+    if (trimmed && !appliances.includes(trimmed)) {
+      setAppliances(prev => [...prev, trimmed]);
+    }
+    setNewAppliance('');
+    inputRef.current?.focus();
+  };
 
   const handleNext = async () => {
     if (!kitchenName || !capacity) {
@@ -71,14 +108,13 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
           latitude: coordinates.latitude,
           longitude: coordinates.longitude,
           max_capacity: parseInt(capacity) || 0,
-          appliances: appliances
-        })
+          appliances: appliances,
+        }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.log('Step 2 API Failed. Status:', response.status);
-        console.log('Error Data:', JSON.stringify(errorData, null, 2));
         throw new Error(errorData.message || `Failed to submit Step 2 (Status: ${response.status})`);
       }
 
@@ -113,14 +149,14 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
         </View>
       </View>
 
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        <ScrollView 
-          style={styles.container} 
+        <ScrollView
+          style={styles.container}
           contentContainerStyle={styles.contentContainer}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
         >
           <View style={styles.introSection}>
             <Text style={styles.subtitle}>WORKSPACE PROFILE</Text>
@@ -131,10 +167,11 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
           </View>
 
           <View style={styles.form}>
+            {/* Kitchen Name */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>KITCHEN NAME</Text>
               <View style={styles.inputWrapper}>
-                <TextInput 
+                <TextInput
                   style={styles.input}
                   value={kitchenName}
                   onChangeText={setKitchenName}
@@ -144,6 +181,7 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
               </View>
             </View>
 
+            {/* Location */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>LOCATION</Text>
 
@@ -203,6 +241,7 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
               ) : null}
             </View>
 
+            {/* Capacity */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>CAPACITY</Text>
               <View style={styles.capacityWrapper}>
@@ -210,7 +249,7 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
                   <Utensils size={24} color={Colors.primary} />
                 </View>
                 <View style={styles.capacityInputContainer}>
-                  <TextInput 
+                  <TextInput
                     style={styles.capacityValue}
                     value={capacity}
                     onChangeText={setCapacity}
@@ -221,26 +260,106 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
               </View>
             </View>
 
+            {/* Appliances */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>APPLIANCES</Text>
-              <View style={styles.tagContainer}>
-                {appliances.map((item) => (
-                  <View key={item} style={styles.tag}>
-                    <Text style={styles.tagText}>{item}</Text>
+              <Text style={styles.applianceHint}>Tap to select - tap again to deselect</Text>
+
+              {/* Preset grid */}
+              <View style={styles.chipGrid}>
+                {PRESET_APPLIANCES.map((item) => {
+                  const selected = appliances.includes(item);
+                  return (
+                    <TouchableOpacity
+                      key={item}
+                      style={[
+                        styles.chip,
+                        selected && styles.chipActive,
+                      ]}
+                      onPress={() => toggleAppliance(item)}
+                      activeOpacity={0.7}
+                    >
+                      {selected && (
+                        <Check size={11} color={Colors.primary} style={{ marginRight: 4 }} />
+                      )}
+                      <Text style={[styles.chipLabel, selected && styles.chipLabelActive]}>
+                        {item}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Custom tags (non-preset selected) */}
+              {appliances.filter(a => !PRESET_APPLIANCES.includes(a)).length > 0 && (
+                <View style={styles.customRow}>
+                  <Text style={styles.customRowLabel}>CUSTOM</Text>
+                  <View style={styles.chipGrid}>
+                    {appliances
+                      .filter(a => !PRESET_APPLIANCES.includes(a))
+                      .map(item => (
+                        <TouchableOpacity
+                          key={item}
+                          style={[
+                            styles.chip,
+                            styles.chipActive,
+                          ]}
+                          onPress={() => toggleAppliance(item)}
+                          activeOpacity={0.7}
+                        >
+                          <Check size={11} color={Colors.primary} style={{ marginRight: 4 }} />
+                          <Text style={[styles.chipLabel, styles.chipLabelActive]}>{item}</Text>
+                          <X size={10} color={Colors.primary} style={{ marginLeft: 4 }} />
+                        </TouchableOpacity>
+                      ))}
                   </View>
-                ))}
-                <TouchableOpacity style={styles.addTagBtn}>
-                  <Text style={styles.addTagText}>+ ADD</Text>
+                </View>
+              )}
+
+              {/* Add custom input */}
+              <View style={styles.addRow}>
+                <TextInput
+                  ref={inputRef}
+                  style={styles.addInput}
+                  value={newAppliance}
+                  onChangeText={setNewAppliance}
+                  placeholder="Add appliance, e.g. ROTISSERIE"
+                  placeholderTextColor={Colors.textSecondary}
+                  autoCapitalize="characters"
+                  returnKeyType="done"
+                  onSubmitEditing={addCustomAppliance}
+                />
+                {newAppliance.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.addCancelBtn}
+                    onPress={() => setNewAppliance('')}
+                    activeOpacity={0.8}
+                  >
+                    <X size={16} color={Colors.textSecondary} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[
+                    styles.addConfirmBtn,
+                    !newAppliance.trim() && styles.addConfirmBtnDisabled,
+                  ]}
+                  onPress={addCustomAppliance}
+                  disabled={!newAppliance.trim()}
+                  activeOpacity={0.8}
+                >
+                  <Plus size={14} color={Colors.background} style={{ marginRight: 6 }} />
+                  <Text style={styles.addConfirmText}>ADD</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
 
+          {/* Footer */}
           <View style={styles.footer}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.prevBtn}>
               <Text style={styles.prevBtnText}>PREVIOUS</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.nextBtn, loading && { opacity: 0.7 }]}
               onPress={handleNext}
               disabled={loading}
@@ -250,7 +369,7 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
               ) : (
                 <>
                   <Text style={styles.nextBtnText}>NEXT</Text>
-                  <ArrowRight size={18} color={Colors.background} style={styles.nextIcon} />
+                  <ArrowRight size={18} color={Colors.background} style={{ marginLeft: 8 }} />
                 </>
               )}
             </TouchableOpacity>
@@ -403,39 +522,114 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 12,
   },
-  tagContainer: {
+  // Appliances
+  applianceHint: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    marginBottom: 14,
+  },
+  chipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    marginBottom: 12,
   },
-  tag: {
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginRight: 10,
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: 'rgba(74, 222, 128, 0.2)',
+    borderColor: Colors.border,
   },
-  tagText: {
+  chipActive: {
+    backgroundColor: 'rgba(74, 222, 128, 0.12)',
+    borderColor: Colors.primary,
+  },
+  chipLabel: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  chipLabelActive: {
     color: Colors.primary,
-    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  customRow: {
+    marginBottom: 8,
+  },
+  customRowLabel: {
+    color: Colors.textSecondary,
+    fontSize: 9,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  addRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    overflow: 'hidden',
+    height: 50,
+  },
+  addInput: {
+    flex: 1,
+    height: 50,
+    paddingHorizontal: 16,
+    color: Colors.text,
+    fontSize: 13,
     fontWeight: 'bold',
     letterSpacing: 0.5,
   },
-  addTagBtn: {
+  addConfirmBtn: {
+    backgroundColor: Colors.primary,
+    height: 50,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addConfirmBtnDisabled: {
+    opacity: 0.5,
+  },
+  addConfirmText: {
+    color: Colors.background,
+    fontWeight: 'bold',
+    fontSize: 11,
+    letterSpacing: 1,
+  },
+  addCancelBtn: {
+    height: 50,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: Colors.border,
+  },
+  addCustomBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
     backgroundColor: Colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
-    marginBottom: 10,
+    marginTop: 4,
   },
-  addTagText: {
+  addCustomText: {
     color: Colors.background,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 'bold',
     letterSpacing: 0.5,
   },
+  // Footer
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -472,9 +666,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 14,
     letterSpacing: 1,
-  },
-  nextIcon: {
-    marginLeft: 8,
   },
   mapContainer: {
     height: 200,

@@ -34,6 +34,57 @@ type FileAsset = {
   type: string;
 };
 
+const STEP_3_UPLOAD_TIMEOUT_MS = 120000;
+
+const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs = STEP_3_UPLOAD_TIMEOUT_MS) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
+const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
+
+const buildStep3Curl = (
+  url: string,
+  token: string | undefined,
+  files: {
+    govId: FileAsset;
+    safetyCert: FileAsset;
+    kitchenPhoto: FileAsset;
+  }
+) => [
+  'curl -X POST',
+  shellQuote(url),
+  "-H 'Accept: application/json'",
+  token ? `-H ${shellQuote(`Authorization: Bearer ${token}`)}` : '',
+  `-F ${shellQuote(`government_id=@${files.govId.uri};filename=${files.govId.name};type=${files.govId.type}`)}`,
+  `-F ${shellQuote(`food_safety_cert=@${files.safetyCert.uri};filename=${files.safetyCert.name};type=${files.safetyCert.type}`)}`,
+  `-F ${shellQuote(`kitchen_photo=@${files.kitchenPhoto.uri};filename=${files.kitchenPhoto.name};type=${files.kitchenPhoto.type}`)}`,
+].filter(Boolean).join(' \\\n  ');
+
+const logStep3Curl = (
+  url: string,
+  token: string | undefined,
+  files: {
+    govId: FileAsset;
+    safetyCert: FileAsset;
+    kitchenPhoto: FileAsset;
+  }
+) => {
+  const curl = buildStep3Curl(url, token, files);
+  console.log('========== STEP 3 CURL START ==========');
+  curl.split('\n').forEach((line) => console.log(line));
+  console.log('========== STEP 3 CURL END ==========');
+};
+
 export const RegisterStep3 = ({ navigation, route }: any) => {
   const [govId, setGovId] = useState<FileAsset | null>(null);
   const [safetyCert, setSafetyCert] = useState<FileAsset | null>(null);
@@ -46,7 +97,13 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
   const [activeSlot, setActiveSlot] = useState<'govId' | 'safetyCert' | 'kitchenPhoto' | null>(null);
 
   const email = route?.params?.email;
-  const token = route?.params?.token;
+  const jwtToken = route?.params?.token || route?.params?.jwt || route?.params?.accessToken;
+
+  const setFileForSlot = (slot: 'govId' | 'safetyCert' | 'kitchenPhoto', file: FileAsset) => {
+    if (slot === 'govId') setGovId(file);
+    else if (slot === 'safetyCert') setSafetyCert(file);
+    else setKitchenPhoto(file);
+  };
 
   const pickDocument = async (setFile: (f: FileAsset) => void) => {
     try {
@@ -80,12 +137,12 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
 
       const result = await (useCamera 
         ? ImagePicker.launchCameraAsync({
-            quality: 0.8,
+            quality: 0.55,
             allowsEditing: true,
           })
         : ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
-            quality: 0.8,
+            quality: 0.55,
             allowsEditing: true,
           })
       );
@@ -102,6 +159,7 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
           type: asset.mimeType || type
         };
 
+        setFileForSlot(slot, newFile);
         setPendingFile(newFile);
         setActiveSlot(slot);
         setPreviewVisible(true);
@@ -114,9 +172,7 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
 
   const handleDone = () => {
     if (pendingFile && activeSlot) {
-      if (activeSlot === 'govId') setGovId(pendingFile);
-      else if (activeSlot === 'safetyCert') setSafetyCert(pendingFile);
-      else if (activeSlot === 'kitchenPhoto') setKitchenPhoto(pendingFile);
+      setFileForSlot(activeSlot, pendingFile);
       
       setPreviewVisible(false);
       setPendingFile(null);
@@ -164,11 +220,24 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
   };
 
   const handleComplete = async () => {
+    console.log('Step 3 submit pressed', {
+      hasGovId: !!govId,
+      hasSafetyCert: !!safetyCert,
+      hasKitchenPhoto: !!kitchenPhoto,
+      hasJwtToken: !!jwtToken,
+    });
+
     if (!govId || !safetyCert || !kitchenPhoto) {
+      const missing = [
+        !govId ? 'Government ID' : null,
+        !safetyCert ? 'Food Safety Certificate' : null,
+        !kitchenPhoto ? 'Kitchen Photo' : null,
+      ].filter(Boolean).join(', ');
+
       Toast.show({
         type: 'error',
         text1: 'Missing Documents',
-        text2: 'Please upload all required files.',
+        text2: `Please upload: ${missing}`,
       });
       return;
     }
@@ -195,20 +264,39 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
         type: kitchenPhoto.type,
       } as any);
 
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}chefs/register/step-3`, {
+      console.log('Step 3 API Request:', {
+        url: `${process.env.EXPO_PUBLIC_API_URL}chefs/register/step-3`,
+        government_id: govId.name,
+        food_safety_cert: safetyCert.name,
+        kitchen_photo: kitchenPhoto.name,
+      });
+
+      const uploadUrl = `${process.env.EXPO_PUBLIC_API_URL}chefs/register/step-3`;
+      logStep3Curl(uploadUrl, jwtToken, {
+        govId,
+        safetyCert,
+        kitchenPhoto,
+      });
+
+      const response = await fetchWithTimeout(uploadUrl, {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : '',
+          'Authorization': jwtToken ? `Bearer ${jwtToken}` : '',
         },
         credentials: 'include',
         body: formData,
       });
+      console.log('Step 3 API Response Status:', response.status);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.log('Step 3 API Failed:', response.status, errorData);
         throw new Error(errorData.message || `Failed to submit Step 3 (Status: ${response.status})`);
       }
+
+      const data = await response.json().catch(() => ({}));
+      console.log('Step 3 API Success:', data);
 
       Toast.show({
         type: 'success',
@@ -218,10 +306,13 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
       
       navigation.navigate('Login');
     } catch (error: any) {
+      console.log('Step 3 API Error:', error?.name, error?.message);
       Toast.show({
         type: 'error',
         text1: 'Upload Error',
-        text2: error.message || 'Failed to upload documents.',
+        text2: error?.name === 'AbortError'
+          ? 'Upload timed out. Please try again with smaller photos or a stronger connection.'
+          : error.message || 'Failed to upload documents.',
       });
     } finally {
       setLoading(false);
@@ -317,8 +408,20 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
                 </View>
               </View>
               <TouchableOpacity style={styles.uploadYoursBtn} onPress={() => handleImageSelection(setKitchenPhoto, 'kitchenPhoto')}>
-                 <Camera size={24} color={Colors.primary} style={{ opacity: 0.5, marginBottom: 8 }} />
-                 <Text style={styles.uploadYoursText}>{kitchenPhoto ? 'Selected' : 'Upload Yours'}</Text>
+                 {kitchenPhoto ? (
+                   <>
+                     <Image source={{ uri: kitchenPhoto.uri }} style={styles.kitchenPhotoPreview} />
+                     <View style={styles.selectedOverlay}>
+                       <CheckCircle size={14} color={Colors.background} />
+                       <Text style={styles.selectedOverlayText}>ATTACHED</Text>
+                     </View>
+                   </>
+                 ) : (
+                   <>
+                     <Camera size={24} color={Colors.primary} style={{ opacity: 0.5, marginBottom: 8 }} />
+                     <Text style={styles.uploadYoursText}>Upload Yours</Text>
+                   </>
+                 )}
               </TouchableOpacity>
             </View>
           </View>
@@ -574,6 +677,29 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  kitchenPhotoPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  selectedOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(74, 222, 128, 0.9)',
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedOverlayText: {
+    color: Colors.background,
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginLeft: 4,
+    letterSpacing: 0.5,
   },
   uploadYoursText: {
     color: Colors.textSecondary,

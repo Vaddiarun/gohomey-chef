@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\gohomey_chef\" -Directory)",
+      "Bash(Select-Object -First 20)",
+      "Bash(wmic logicaldisk *)",
+      "Bash(git fetch *)",
+      "Bash(git config *)",
+      "Bash(findstr user *)",
+      "Bash(git pull *)",
+      "Bash(git ls-tree *)",
+      "Bash(Rename-Item -Path \"C:\\\\gohomey_chef\\\\.claude\\\\settings.local.json\" -NewName \"settings.local.json.bak\")"
+    ]
+  }
+}

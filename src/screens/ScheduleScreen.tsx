@@ -15,6 +15,7 @@ import { Calendar as CalendarIcon, Clock, Users, ChevronRight, X, AlertCircle, C
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { ActivityIndicator, Alert } from 'react-native';
+import { resolveImageSource } from '../utils/media';
 
 interface Meal {
   id: string;
@@ -128,11 +129,8 @@ export const ScheduleScreen = () => {
     fetchMeals();
   }, [fetchMeals]);
 
-  const getImageUrl = (url: string) => {
-    if (!url) return require('../assets/images/risotto.png');
-    if (url.startsWith('http')) return { uri: url };
-    return { uri: `${process.env.EXPO_PUBLIC_API_URL.replace('/api/v1/', '')}${url}` };
-  };
+  const getImageUrl = (url: string) =>
+    resolveImageSource(url, require('../assets/images/risotto.png'));
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Image, Pressable, TouchableOpacity } from 'react-native';
 import { Colors, Spacing, Typography } from '../theme';
 import { Package, Edit3, Trash2, IndianRupee } from 'lucide-react-native';
+import { resolveImageSource } from '../utils/media';
 
 interface PantryCardProps {
   id: string;
@@ -13,14 +14,6 @@ interface PantryCardProps {
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 }
-
-const getImageUrl = (url?: string) => {
-  if (!url || url.startsWith('file://')) return null;
-  if (url.startsWith('http')) return { uri: url };
-  const base = (process.env.EXPO_PUBLIC_API_URL ?? '').replace('/api/v1/', '').replace(/\/$/, '');
-  const path = url.startsWith('/') ? url : `/${url}`;
-  return { uri: `${base}${path}` };
-};
 
 export const PantryCard: React.FC<PantryCardProps> = ({
   id,
@@ -34,7 +27,7 @@ export const PantryCard: React.FC<PantryCardProps> = ({
 }) => {
   const isLowStock = inventory <= 5;
   const isOutOfStock = inventory === 0;
-  const imageSource = getImageUrl(image_url);
+  const imageSource = resolveImageSource(image_url);
   const [imgError, setImgError] = React.useState(false);
 
   return (

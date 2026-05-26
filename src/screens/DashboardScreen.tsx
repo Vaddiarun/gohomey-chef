@@ -29,6 +29,7 @@ import { Colors, Spacing, Typography } from '../theme';
 import { StatCard } from '../components/StatCard';
 import { SlotCard } from '../components/SlotCard';
 import { ChefTip } from '../components/ChefTip';
+import { resolveImageSource } from '../utils/media';
 
 type RootStackParamList = {
   Main: undefined;
@@ -195,11 +196,8 @@ export const DashboardScreen = () => {
     fetchDashboardData(true);
   }, [fetchDashboardData]);
 
-  const getImageUrl = (url: string) => {
-    if (!url) return require('../assets/images/risotto.png'); // Fallback
-    if (url.startsWith('http')) return { uri: url };
-    return { uri: `${process.env.EXPO_PUBLIC_API_URL.replace('/api/v1/', '')}${url}` };
-  };
+  const getImageUrl = (url: string) =>
+    resolveImageSource(url, require('../assets/images/risotto.png'));
 
   const getGreeting = () => {
     const hour = new Date().getHours();

@@ -15,6 +15,7 @@ import { SlotProgress } from '../components/SlotProgress';
 import { useSocial, SocialEvent } from '../context/SocialContext';
 import { format } from 'date-fns';
 import MapView, { Marker } from '../components/PlatformMap';
+import { resolveImageSource } from '../utils/media';
 
 export const EventDetailScreen = ({ route, navigation }: any) => {
   const { eventId } = route.params;
@@ -34,12 +35,10 @@ export const EventDetailScreen = ({ route, navigation }: any) => {
 
 
 
-  const getImageUrl = () => {
-    const url = event?.image_url;
-    if (url && url.startsWith('http')) return { uri: url };
-    if (event?.chef?.kitchen_photo_url) return { uri: event.chef.kitchen_photo_url };
-    return { uri: 'https://via.placeholder.com/800x400' };
-  };
+  const getImageUrl = () =>
+    resolveImageSource(event?.image_url) ||
+    resolveImageSource(event?.chef?.kitchen_photo_url) ||
+    { uri: 'https://via.placeholder.com/800x400' };
 
   if (loading) {
     return (

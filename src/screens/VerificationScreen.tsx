@@ -25,14 +25,22 @@ export const VerificationScreen = ({ navigation, route }: any) => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(59);
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const inputRefs = useRef<Array<any>>([]);
 
   useEffect(() => {
+    if (timer <= 0) {
+      return;
+    }
+
     const interval = setInterval(() => {
       setTimer((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [timer]);
+
+  const formattedPhone = `+91${String(phoneNumber).replace(/\D/g, '').slice(-10)}`;
+  const timerLabel = `0:${timer < 10 ? `0${timer}` : timer}`;
 
   const handleOtpChange = (value: string, index: number) => {
     const newOtp = [...otp];
@@ -67,7 +75,7 @@ export const VerificationScreen = ({ navigation, route }: any) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ phone: `+91${phoneNumber}`, otp: fullOtp }),
+        body: JSON.stringify({ phone: formattedPhone, otp: fullOtp }),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -122,6 +130,56 @@ export const VerificationScreen = ({ navigation, route }: any) => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendLoading) {
+      return;
+    }
+
+    if (timer > 0) {
+      Toast.show({
+        type: 'info',
+        text1: 'Please wait',
+        text2: `You can resend OTP in ${timerLabel}.`,
+      });
+      return;
+    }
+
+    setResendLoading(true);
+    try {
+      console.log('Resend OTP API Request:', formattedPhone);
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ phone: formattedPhone }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.log('Resend OTP API Failed:', errorData);
+        throw new Error(errorData.message || 'Failed to resend OTP');
+      }
+
+      setOtp(['', '', '', '', '', '']);
+      setTimer(59);
+      inputRefs.current[0]?.focus();
+      Toast.show({
+        type: 'success',
+        text1: 'OTP Sent',
+        text2: 'Please check your messages.',
+      });
+    } catch (error: any) {
+      console.log('Resend OTP API Error:', error.message);
+      Toast.show({
+        type: 'error',
+        text1: 'Resend Failed',
+        text2: error.message || 'Could not resend OTP',
+      });
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -187,11 +245,21 @@ export const VerificationScreen = ({ navigation, route }: any) => {
                 </TouchableOpacity>
 
                 <View style={styles.resendContainer}>
-                  <TouchableOpacity disabled={timer > 0}>
-                    <Text style={[styles.resendText, timer > 0 && styles.resendDisabled]}>RESEND CODE</Text>
+                  <TouchableOpacity
+                    onPress={handleResendOtp}
+                    disabled={resendLoading}
+                    style={styles.resendButton}
+                  >
+                    {resendLoading ? (
+                      <ActivityIndicator color={Colors.primary} size="small" />
+                    ) : (
+                      <Text style={[styles.resendText, timer > 0 && styles.resendDisabled]}>
+                        RESEND CODE
+                      </Text>
+                    )}
                   </TouchableOpacity>
                   {timer > 0 && (
-                    <Text style={styles.timerText}>Wait 0:{timer < 10 ? `0${timer}` : timer} to request new code</Text>
+                    <Text style={styles.timerText}>Wait {timerLabel} to request new code</Text>
                   )}
                 </View>
               </View>
@@ -325,6 +393,11 @@ const styles = StyleSheet.create({
   },
   resendContainer: {
     alignItems: 'center',
+  },
+  resendButton: {
+    minHeight: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   resendText: {
     ...Typography.body,
