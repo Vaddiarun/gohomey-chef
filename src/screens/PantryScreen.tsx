@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -17,6 +16,7 @@ import { Colors, Spacing, Typography } from '../theme';
 import { PantryCard } from '../components/PantryCard';
 import { ChefTip } from '../components/ChefTip';
 import { StatusModal } from '../components/StatusModal';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { useAuth } from '../context/AuthContext';
 
 type RootStackParamList = {
@@ -46,6 +46,7 @@ export const PantryScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [modalConfig, setModalConfig] = useState<{
     visible: boolean;
@@ -121,18 +122,7 @@ export const PantryScreen = () => {
   );
 
   const handleDelete = (id: string) => {
-    Alert.alert(
-      'Remove Item',
-      'Are you sure you want to remove this pantry item? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => performDelete(id),
-        },
-      ]
-    );
+    setConfirmDeleteId(id);
   };
 
   const performDelete = async (id: string) => {
@@ -194,6 +184,20 @@ export const PantryScreen = () => {
         title={modalConfig.title}
         message={modalConfig.message}
         onClose={modalConfig.onClose}
+      />
+
+      <ConfirmModal
+        visible={confirmDeleteId !== null}
+        title="Remove Item"
+        message="Are you sure you want to remove this pantry item? This action cannot be undone."
+        confirmText="Remove"
+        cancelText="Cancel"
+        danger
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={() => {
+          if (confirmDeleteId) performDelete(confirmDeleteId);
+          setConfirmDeleteId(null);
+        }}
       />
 
       <View style={styles.container}>
