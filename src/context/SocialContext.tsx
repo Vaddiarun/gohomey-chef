@@ -1,6 +1,22 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 
+const SOCIAL_UPLOAD_TIMEOUT_MS = 120000;
+
+const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs = SOCIAL_UPLOAD_TIMEOUT_MS) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
 export type SocialEvent = {
   id: string;
   title: string;
@@ -34,7 +50,7 @@ type SocialContextType = {
   fetchEvents: (chefId?: string, date?: string) => Promise<void>;
   fetchEventDetails: (id: string) => Promise<SocialEvent | null>;
   fetchStats: () => Promise<void>;
-  createEvent: (eventData: Partial<SocialEvent>) => Promise<boolean>;
+  createEvent: (eventData: Partial<SocialEvent> | FormData) => Promise<boolean>;
   joinEvent: (eventId: string, gender: 'male' | 'female') => Promise<boolean>;
 };
 
@@ -58,14 +74,17 @@ export const SocialProvider = ({ children }: { children: React.ReactNode }) => {
   const apiFetch = useCallback(async (endpoint: string, options: RequestInit = {}) => {
     const url = `${process.env.EXPO_PUBLIC_API_URL}${endpoint}`;
     console.log(`API Request: ${options.method || 'GET'}`, url);
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
     
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       ...options,
       headers: {
+        'Accept': 'application/json',
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...options.headers,
       },
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -131,11 +150,12 @@ export const SocialProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const createEvent = async (eventData: Partial<SocialEvent>) => {
+  const createEvent = async (eventData: Partial<SocialEvent> | FormData) => {
     try {
+      const isFormData = typeof FormData !== 'undefined' && eventData instanceof FormData;
       const result = await apiFetch('social', {
         method: 'POST',
-        body: JSON.stringify(eventData),
+        body: isFormData ? eventData : JSON.stringify(eventData),
       });
       console.log('POST SOCIAL API Response:', JSON.stringify(result, null, 2));
       if (result.status === 'success') {

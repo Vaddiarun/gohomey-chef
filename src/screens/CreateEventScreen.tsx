@@ -15,14 +15,52 @@ import {
 import { MapPin, Calendar, Clock, ChevronLeft, Info, Camera, Users } from 'lucide-react-native';
 import { Colors, Spacing, Typography } from '../theme';
 import { useSocial } from '../context/SocialContext';
+import { useAuth } from '../context/AuthContext';
 import MapView, { Marker, Region } from '../components/PlatformMap';
 import { LocationSearchInput } from '../components/LocationSearchInput';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
+const isLocalFileUri = (uri?: string | null) => typeof uri === 'string' && uri.startsWith('file://');
+
+const uploadImageToCloudinary = async (imageUri: string) => {
+  const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+  if (!cloudName || !uploadPreset) {
+    return null;
+  }
+
+  const filename = imageUri.split('/').pop() || `social_event_${Date.now()}.jpg`;
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+  const formData = new FormData();
+  formData.append('file', {
+    uri: imageUri,
+    name: filename,
+    type,
+  } as any);
+  formData.append('upload_preset', uploadPreset);
+  formData.append('folder', 'homey/social-events');
+
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.secure_url) {
+    throw new Error(result.error?.message || 'Failed to upload social image');
+  }
+
+  return result.secure_url as string;
+};
+
 export const CreateEventScreen = ({ navigation }: any) => {
   const { createEvent } = useSocial();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
 
   // Form State
@@ -53,7 +91,7 @@ export const CreateEventScreen = ({ navigation }: any) => {
 
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [16, 9],
       quality: 0.8,
@@ -75,6 +113,17 @@ export const CreateEventScreen = ({ navigation }: any) => {
     const startDate = new Date(date);
     const endDate = new Date(startDate);
     endDate.setHours(startDate.getHours() + 3);
+    const slotsTotal = parseInt(maleSlots) + parseInt(femaleSlots) || 10;
+    const numericPrice = parseFloat(price) || 0;
+    let imageUrlToSend = imageUrl;
+
+    if (isLocalFileUri(imageUrl)) {
+      const uploadedUrl = await uploadImageToCloudinary(imageUrl);
+      imageUrlToSend = uploadedUrl || user?.kitchen_photo_url || '';
+      if (!uploadedUrl && imageUrlToSend) {
+        console.log('Cloudinary upload env missing; using chef kitchen_photo_url for social image_url');
+      }
+    }
 
     const eventData = {
       title,
@@ -82,14 +131,15 @@ export const CreateEventScreen = ({ navigation }: any) => {
       date,
       end_date: endDate.toISOString(),
       location,
-      price: parseFloat(price) || 0,
-      slots_total: parseInt(maleSlots) + parseInt(femaleSlots) || 10,
+      price: numericPrice,
+      slots_total: slotsTotal,
       social_balance: socialBalance,
-      image_url: imageUrl,
+      image_url: imageUrlToSend,
     };
 
     console.log('Sending Event Data:', JSON.stringify(eventData, null, 2));
     const success = await createEvent(eventData);
+
     setLoading(false);
 
     if (success) {
