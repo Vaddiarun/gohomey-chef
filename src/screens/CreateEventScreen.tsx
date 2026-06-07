@@ -21,6 +21,7 @@ import { LocationSearchInput } from '../components/LocationSearchInput';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { getRequiredPrice, isPriceAboveLimit, MAX_PRICE } from '../utils/price';
 
 const isLocalFileUri = (uri?: string | null) => typeof uri === 'string' && uri.startsWith('file://');
 
@@ -68,7 +69,7 @@ export const CreateEventScreen = ({ navigation }: any) => {
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date().toISOString());
   const [location, setLocation] = useState('');
-  const [price, setPrice] = useState('0');
+  const [price, setPrice] = useState('');
   const [maleSlots, setMaleSlots] = useState('5');
   const [femaleSlots, setFemaleSlots] = useState('5');
   const [socialBalance, setSocialBalance] = useState(true);
@@ -87,6 +88,8 @@ export const CreateEventScreen = ({ navigation }: any) => {
     latitude: 19.0760,
     longitude: 72.8777,
   });
+  const parsedPrice = getRequiredPrice(price);
+  const priceAboveLimit = isPriceAboveLimit(price);
 
 
   const handlePickImage = async () => {
@@ -103,8 +106,8 @@ export const CreateEventScreen = ({ navigation }: any) => {
   };
 
   const handleSave = async () => {
-    if (!title || !description || !location) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!title || !description || !location || parsedPrice === null) {
+      Alert.alert('Error', 'Please fill in title, description, location, and a valid price');
       return;
     }
 
@@ -114,7 +117,7 @@ export const CreateEventScreen = ({ navigation }: any) => {
     const endDate = new Date(startDate);
     endDate.setHours(startDate.getHours() + 3);
     const slotsTotal = parseInt(maleSlots) + parseInt(femaleSlots) || 10;
-    const numericPrice = parseFloat(price) || 0;
+    const numericPrice = parsedPrice;
     let imageUrlToSend = imageUrl;
 
     if (isLocalFileUri(imageUrl)) {
@@ -223,6 +226,9 @@ export const CreateEventScreen = ({ navigation }: any) => {
             value={price}
             onChangeText={setPrice}
           />
+          {priceAboveLimit ? (
+            <Text style={styles.errorHint}>Price cannot exceed ₹{MAX_PRICE.toLocaleString('en-IN')}.</Text>
+          ) : null}
         </View>
 
         {/* Slots Distribution */}
@@ -324,9 +330,9 @@ export const CreateEventScreen = ({ navigation }: any) => {
         </View>
 
         <TouchableOpacity 
-          style={styles.submitBtn}
+          style={[styles.submitBtn, (loading || parsedPrice === null) && styles.disabledBtn]}
           onPress={handleSave}
-          disabled={loading}
+          disabled={loading || parsedPrice === null}
         >
           {loading ? (
             <ActivityIndicator color={Colors.background} />
@@ -521,6 +527,13 @@ const styles = StyleSheet.create({
   },
   disabledBtn: {
     opacity: 0.5,
+  },
+  errorHint: {
+    ...Typography.caption,
+    color: Colors.danger,
+    fontSize: 11,
+    marginTop: 6,
+    fontWeight: 'bold',
   },
   submitBtn: {
     backgroundColor: Colors.primary,

@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
-import { ShoppingBag, User, Utensils, LayoutGrid, ClipboardList, Package, Users } from 'lucide-react-native';
+import { ShoppingBag, User, Utensils, LayoutGrid, ClipboardList, Package, Users, Zap } from 'lucide-react-native';
 import { View, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { Colors, Typography } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +23,7 @@ const MyTheme = {
 };
 import {
   DashboardScreen,
+  CatalogHistoryScreen,
   OrdersScreen,
   CreateSlotScreen,
   ScheduleScreen,
@@ -42,6 +43,9 @@ import {
   EventDetailScreen,
   CreateEventScreen,
   SubscriptionScreen,
+  FuelDashboardScreen,
+  FuelSubscribersScreen,
+  FuelWeighInScreen,
 } from '../screens';
 
 const Tab = createBottomTabNavigator();
@@ -61,6 +65,7 @@ function TabNavigator() {
           if (route.name === 'Dashboard') IconComponent = LayoutGrid;
           else if (route.name === 'Orders') IconComponent = ClipboardList;
           else if (route.name === 'Pantry') IconComponent = Package;
+          else if (route.name === 'Fuel') IconComponent = Zap;
           else if (route.name === 'Social') IconComponent = Users;
           else if (route.name === 'Profile') IconComponent = User;
           else IconComponent = LayoutGrid;
@@ -86,6 +91,7 @@ function TabNavigator() {
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="Orders" component={OrdersScreen} />
+      <Tab.Screen name="Fuel" component={FuelDashboardScreen} />
       <Tab.Screen name="Pantry" component={PantryScreen} />
       <Tab.Screen name="Social" component={SocialEventsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
@@ -208,6 +214,27 @@ function AppNavigatorInner() {
           name="Subscriptions"
           component={SubscriptionScreen}
           options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="CatalogHistory"
+          component={CatalogHistoryScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="FuelSubscribers"
+          component={FuelSubscribersScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="FuelWeighIn"
+          component={FuelWeighInScreen}
+          options={{
+            headerShown: true,
+            headerTitle: 'Weigh-In Proof',
+            headerStyle: { backgroundColor: Colors.background },
+            headerTintColor: Colors.text,
+            headerTitleStyle: { fontWeight: 'bold' as const, fontSize: 18, color: Colors.text },
+          }}
         />
       </Stack.Navigator>
     </NavigationContainer>

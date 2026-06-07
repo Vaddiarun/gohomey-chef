@@ -16,6 +16,7 @@ import { useSocial, SocialEvent } from '../context/SocialContext';
 import { format } from 'date-fns';
 import MapView, { Marker } from '../components/PlatformMap';
 import { resolveImageSource } from '../utils/media';
+import { getSocialBookedCount } from '../utils/socialEvent';
 
 export const EventDetailScreen = ({ route, navigation }: any) => {
   const { eventId } = route.params;
@@ -56,7 +57,7 @@ export const EventDetailScreen = ({ route, navigation }: any) => {
     );
   }
 
-  const bookedCount = (event as any).slots_booked || 0;
+  const bookedCount = getSocialBookedCount(event);
   const isFull = bookedCount >= event.slots_total;
 
   return (

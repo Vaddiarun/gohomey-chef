@@ -33,6 +33,8 @@ interface PantryItem {
   price: number;
   inventory: number;
   image_url?: string;
+  imageUrl?: string;
+  image?: string;
 }
 
 
@@ -85,6 +87,10 @@ export const PantryScreen = () => {
       }
 
       const result = await response.json();
+      console.log('========== PANTRY FETCH RESPONSE START ==========');
+      console.log('Pantry Fetch Response Status:', response.status);
+      console.log('Pantry Fetch Response Body:', JSON.stringify(result, null, 2));
+      console.log('========== PANTRY FETCH RESPONSE END ==========');
 
       let pantryItems: PantryItem[] = [];
       if (Array.isArray(result)) {
@@ -96,6 +102,11 @@ export const PantryScreen = () => {
       } else {
         throw new Error(result.message || 'Something went wrong');
       }
+
+      pantryItems = pantryItems.map((item) => ({
+        ...item,
+        image_url: item.image_url || item.imageUrl || item.image,
+      }));
 
       console.log(`\n===== PANTRY ITEMS (${pantryItems.length} total) =====`);
       pantryItems.forEach((item, index) => {

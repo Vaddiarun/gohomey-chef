@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
 import { 
   Plus, 
   Calendar, 
@@ -31,16 +30,6 @@ import { SlotCard } from '../components/SlotCard';
 import { ChefTip } from '../components/ChefTip';
 import { resolveImageSource } from '../utils/media';
 
-type RootStackParamList = {
-  Main: undefined;
-  CreateSlot: undefined;
-  Kitchen: undefined;
-  Profile: undefined;
-  ProofUpload: { mealId: string };
-};
-
-type NavigationProp = StackNavigationProp<RootStackParamList>;
-
 interface Slot {
   id: string;
   meal_name: string;
@@ -61,7 +50,7 @@ interface DashboardData {
 }
 
 export const DashboardScreen = () => {
-  const navigation = useNavigation<NavigationProp>();
+  const navigation = useNavigation<any>();
   const { token, user } = useAuth();
   
   useEffect(() => {
@@ -206,6 +195,10 @@ export const DashboardScreen = () => {
     return 'Good Evening';
   };
 
+  const handleProfilePress = () => {
+    navigation.navigate('Profile');
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <ScrollView 
@@ -240,7 +233,7 @@ export const DashboardScreen = () => {
             </View>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.profileIcon} onPress={() => navigation.navigate('Profile')}>
+            <TouchableOpacity style={styles.profileIcon} onPress={handleProfilePress}>
               <ChefHat size={24} color={Colors.primary} />
             </TouchableOpacity>
           </View>
@@ -301,21 +294,12 @@ export const DashboardScreen = () => {
                 <ChevronRight size={16} color={Colors.primary} />
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.manageBtn}
-                onPress={() => navigation.navigate('Subscriptions' as any)}
-              >
-                <Wallet size={16} color={Colors.primary} />
-                <Text style={styles.manageBtnText}>Fuel - Subscriptions</Text>
-                <ChevronRight size={16} color={Colors.primary} />
-              </TouchableOpacity>
-
             </View>
 
             {/* Active Slots Section */}
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Active Slots Today</Text>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => navigation.navigate('CatalogHistory')}>
                 <Text style={styles.viewHistory}>View History</Text>
               </TouchableOpacity>
             </View>
@@ -331,7 +315,6 @@ export const DashboardScreen = () => {
                   slotsLeft={slot.slots_remaining}
                   price={slot.price}
                   type={slot.type}
-                  onPress={() => navigation.navigate('ProofUpload', { mealId: slot.id })}
                 />
               ))
             ) : (

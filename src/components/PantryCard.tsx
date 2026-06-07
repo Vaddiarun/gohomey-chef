@@ -30,12 +30,24 @@ export const PantryCard: React.FC<PantryCardProps> = ({
   const imageSource = resolveImageSource(image_url);
   const [imgError, setImgError] = React.useState(false);
 
+  React.useEffect(() => {
+    setImgError(false);
+  }, [image_url]);
+
   return (
     <View style={styles.container}>
       {/* Image Section */}
       <View style={styles.imageContainer}>
         {imageSource && !imgError ? (
-          <Image source={imageSource} style={styles.image} onError={() => setImgError(true)} />
+          <Image
+            source={imageSource}
+            style={styles.image}
+            resizeMode="cover"
+            onError={() => {
+              console.log('Pantry image failed to load:', image_url);
+              setImgError(true);
+            }}
+          />
         ) : (
           <View style={styles.imagePlaceholder}>
             <Package size={28} color={Colors.primary} />

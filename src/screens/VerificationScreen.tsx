@@ -43,11 +43,24 @@ export const VerificationScreen = ({ navigation, route }: any) => {
   const timerLabel = `0:${timer < 10 ? `0${timer}` : timer}`;
 
   const handleOtpChange = (value: string, index: number) => {
+    const digits = value.replace(/\D/g, '').split('');
+    if (digits.length > 1) {
+      const newOtp = [...otp];
+      digits.slice(0, 6 - index).forEach((digit, offset) => {
+        newOtp[index + offset] = digit;
+      });
+      setOtp(newOtp);
+
+      const nextIndex = Math.min(index + digits.length, 5);
+      inputRefs.current[nextIndex]?.focus();
+      return;
+    }
+
     const newOtp = [...otp];
-    newOtp[index] = value;
+    newOtp[index] = digits[0] || '';
     setOtp(newOtp);
 
-    if (value && index < 5) {
+    if (digits[0] && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -223,7 +236,7 @@ export const VerificationScreen = ({ navigation, route }: any) => {
                         ref={(el) => { inputRefs.current[index] = el; }}
                         style={styles.otpInput}
                         keyboardType="number-pad"
-                        maxLength={1}
+                        maxLength={index === 0 ? 6 : 1}
                         value={digit}
                         onChangeText={(val) => handleOtpChange(val, index)}
                         onKeyPress={(e) => handleKeyPress(e, index)}

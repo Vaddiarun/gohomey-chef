@@ -1,4 +1,5 @@
 export * from './DashboardScreen';
+export * from './CatalogHistoryScreen';
 export * from './OrdersScreen';
 export * from './CreateSlotScreen';
 export * from './ScheduleScreen';
@@ -18,3 +19,6 @@ export * from './SocialEventsScreen';
 export * from './EventDetailScreen';
 export * from './CreateEventScreen';
 export * from './SubscriptionScreen';
+export * from './FuelDashboardScreen';
+export * from './FuelSubscribersScreen';
+export * from './FuelWeighInScreen';

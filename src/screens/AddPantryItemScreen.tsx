@@ -18,6 +18,7 @@ import { StatusModal } from '../components/StatusModal';
 import { Plus, Minus, Camera, Image as ImageIcon } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
+import { getRequiredPrice, isPriceAboveLimit, MAX_PRICE } from '../utils/price';
 
 type RouteParams = {
   AddPantryItem: {
@@ -33,6 +34,82 @@ type RouteParams = {
 };
 
 const CATEGORIES = ['Vegetables', 'Spices', 'Dairy', 'Grains', 'Meat', 'Other'];
+const isLocalFileUri = (uri?: string | null) => typeof uri === 'string' && uri.startsWith('file://');
+
+const getImageFile = (uri: string) => {
+  const filename = uri.split('/').pop() || `pantry_${Date.now()}.jpg`;
+  const extension = /\.(\w+)$/.exec(filename)?.[1]?.toLowerCase();
+  const type = extension ? `image/${extension === 'jpg' ? 'jpeg' : extension}` : 'image/jpeg';
+
+  return {
+    uri,
+    name: filename,
+    type,
+  };
+};
+
+const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
+
+const buildPantryCurl = (
+  url: string,
+  method: string,
+  token: string | null | undefined,
+  values: {
+    name: string;
+    category: string;
+    price: number;
+    inventory: number;
+    image?: ReturnType<typeof getImageFile> | null;
+    imageUrl?: string | null;
+  }
+) => {
+  const base = [
+    `curl -X ${method}`,
+    shellQuote(url),
+    "-H 'Accept: application/json'",
+    token ? `-H ${shellQuote(`Authorization: Bearer ${token}`)}` : '',
+  ];
+
+  if (values.image) {
+    return [
+      ...base,
+      `-F ${shellQuote(`name=${values.name}`)}`,
+      `-F ${shellQuote(`category=${values.category}`)}`,
+      `-F ${shellQuote(`price=${values.price}`)}`,
+      `-F ${shellQuote(`inventory=${values.inventory}`)}`,
+      `-F ${shellQuote(`image=@${values.image.uri};filename=${values.image.name};type=${values.image.type}`)}`,
+    ].filter(Boolean).join(' \\\n  ');
+  }
+
+  const jsonBody: Record<string, any> = {
+    name: values.name,
+    category: values.category,
+    price: values.price,
+    inventory: values.inventory,
+  };
+
+  if (values.imageUrl) {
+    jsonBody.image_url = values.imageUrl;
+  }
+
+  return [
+    ...base,
+    "-H 'Content-Type: application/json'",
+    `--data ${shellQuote(JSON.stringify(jsonBody))}`,
+  ].filter(Boolean).join(' \\\n  ');
+};
+
+const logPantryCurl = (
+  url: string,
+  method: string,
+  token: string | null | undefined,
+  values: Parameters<typeof buildPantryCurl>[3]
+) => {
+  const curl = buildPantryCurl(url, method, token, values);
+  console.log('========== PANTRY CURL START ==========');
+  curl.split('\n').forEach((line) => console.log(line));
+  console.log('========== PANTRY CURL END ==========');
+};
 
 export const AddPantryItemScreen = () => {
   const navigation = useNavigation();
@@ -48,6 +125,8 @@ export const AddPantryItemScreen = () => {
   const [inventory, setInventory] = useState(editItem?.inventory ?? 10);
   const [image, setImage] = useState<string | null>(editItem?.image_url || null);
   const [loading, setLoading] = useState(false);
+  const parsedPrice = getRequiredPrice(price);
+  const priceAboveLimit = isPriceAboveLimit(price);
 
   const [modalConfig, setModalConfig] = useState<{
     visible: boolean;
@@ -113,12 +192,12 @@ export const AddPantryItemScreen = () => {
   };
 
   const handleSubmit = async () => {
-    if (!name || !category || !price) {
+    if (!name || !category || parsedPrice === null) {
       setModalConfig({
         visible: true,
         type: 'error',
         title: 'Missing Details',
-        message: 'Please fill in item name, category, and price.',
+        message: 'Please fill in item name, category, and a valid price.',
         onClose: () => setModalConfig(prev => ({ ...prev, visible: false })),
       });
       return;
@@ -130,30 +209,78 @@ export const AddPantryItemScreen = () => {
         ? `${process.env.EXPO_PUBLIC_API_URL}pantry/${editItem!.id}`
         : `${process.env.EXPO_PUBLIC_API_URL}pantry`;
 
-      const body: Record<string, any> = {
-        name,
-        category,
-        price: parseFloat(price),
-        inventory,
+      const imageFile = image && isLocalFileUri(image) ? getImageFile(image) : null;
+
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
       };
 
-      if (image) {
-        body.image_url = image;
+      let body: BodyInit;
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('category', category);
+        formData.append('price', String(parsedPrice));
+        formData.append('inventory', String(inventory));
+        formData.append('image', imageFile as any);
+        body = formData;
+      } else {
+        headers['Content-Type'] = 'application/json';
+
+        const jsonBody: Record<string, any> = {
+          name,
+          category,
+          price: parsedPrice,
+          inventory,
+        };
+
+        if (image) {
+          jsonBody.image_url = image;
+        }
+
+        body = JSON.stringify(jsonBody);
       }
 
-      console.log(`API Request: ${isEditing ? 'PATCH' : 'POST'}`, url, body);
+      const method = isEditing ? 'PATCH' : 'POST';
+      console.log('========== PANTRY REQUEST START ==========');
+      console.log('Pantry API Request:', {
+        method,
+        url,
+        auth: token ? 'Bearer token attached' : 'No token',
+        contentType: imageFile ? 'multipart/form-data (boundary set by React Native)' : headers['Content-Type'],
+        body: imageFile
+          ? {
+              name,
+              category,
+              price: parsedPrice,
+              inventory,
+              image: imageFile,
+            }
+          : JSON.parse(body as string),
+      });
+      logPantryCurl(url, method, token, {
+        name,
+        category,
+        price: parsedPrice,
+        inventory,
+        image: imageFile,
+        imageUrl: !imageFile ? image : null,
+      });
+      console.log('========== PANTRY REQUEST END ==========');
 
       const response = await fetch(url, {
-        method: isEditing ? 'PATCH' : 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
+        method,
+        headers,
+        credentials: 'include',
+        body,
       });
 
+      console.log('========== PANTRY RESPONSE START ==========');
+      console.log('Pantry API Response Status:', response.status);
       const result = await response.json();
-      console.log('API Response:', JSON.stringify(result, null, 2));
+      console.log('Pantry API Response Body:', JSON.stringify(result, null, 2));
+      console.log('========== PANTRY RESPONSE END ==========');
 
       if (response.ok) {
         setModalConfig({
@@ -293,6 +420,9 @@ export const AddPantryItemScreen = () => {
               onChangeText={setPrice}
             />
           </View>
+          {priceAboveLimit ? (
+            <Text style={styles.errorHint}>Price cannot exceed ₹{MAX_PRICE.toLocaleString('en-IN')}.</Text>
+          ) : null}
         </View>
 
         {/* Inventory */}
@@ -320,9 +450,9 @@ export const AddPantryItemScreen = () => {
 
         {/* Submit Button */}
         <TouchableOpacity
-          style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+          style={[styles.submitBtn, (loading || parsedPrice === null) && styles.submitBtnDisabled]}
           onPress={handleSubmit}
-          disabled={loading}
+          disabled={loading || parsedPrice === null}
         >
           {loading ? (
             <ActivityIndicator color={Colors.background} size="small" />
@@ -507,6 +637,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 6,
     fontStyle: 'italic',
+  },
+  errorHint: {
+    ...Typography.caption,
+    color: Colors.danger,
+    fontSize: 11,
+    marginTop: 6,
+    fontWeight: 'bold',
   },
   submitBtn: {
     backgroundColor: Colors.primary,

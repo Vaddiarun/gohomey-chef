@@ -14,7 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography } from '../theme';
 import {
   ChevronLeft,
-  Camera,
   User,
   Mail,
   MapPin,
@@ -145,9 +144,6 @@ export const EditProfileScreen = ({ navigation }: any) => {
               <View style={styles.avatarCircle}>
                 <User size={48} color={Colors.primary} />
               </View>
-              <TouchableOpacity style={styles.cameraBtn}>
-                <Camera size={16} color={Colors.background} />
-              </TouchableOpacity>
             </View>
             <Text style={styles.chefName}>{fullName || 'Chef'}</Text>
             {kitchenName ? <Text style={styles.chefSubtitle}>{kitchenName}</Text> : null}
@@ -270,19 +266,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  cameraBtn: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: Colors.primary,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: Colors.background,
   },
   chefName: {
     ...Typography.h2,

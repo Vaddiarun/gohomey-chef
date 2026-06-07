@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx expo *)"
+      "Bash(npx expo *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://gohomeyy-backend.onrender.com/api/v1/fuel/chef/fulfillments\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://gohomeyy-backend.onrender.com/api/v1/fuel/chef/subscriptions\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://gohomeyy-backend.onrender.com/api/v1/fuel/now/chef-stream\")"
     ]
   }
 }

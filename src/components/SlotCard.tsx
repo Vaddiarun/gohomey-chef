@@ -31,10 +31,10 @@ export const SlotCard: React.FC<SlotCardProps> = ({
   const isCooking = status === 'COOKING';
   const isVeg = type === 'VEG';
 
-  return (
-    <Pressable style={styles.container} onPress={onPress}>
+  const content = (
+    <>
       <Image source={image} style={styles.image} />
-      
+
       {/* Top Badges */}
       <View style={styles.topBadges}>
         <View style={styles.statusBadge}>
@@ -74,7 +74,21 @@ export const SlotCard: React.FC<SlotCardProps> = ({
           </View>
         </View>
       </View>
-    </Pressable>
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable style={styles.container} onPress={onPress}>
+        {content}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {content}
+    </View>
   );
 };
 

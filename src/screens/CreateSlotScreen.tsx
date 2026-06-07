@@ -20,6 +20,7 @@ import { normalizeSlot, SlotType } from '../utils/dateTime';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { ActivityIndicator } from 'react-native';
+import { getRequiredPrice, isPriceAboveLimit, MAX_PRICE } from '../utils/price';
 
 export const CreateSlotScreen = () => {
   const navigation = useNavigation();
@@ -37,6 +38,8 @@ export const CreateSlotScreen = () => {
   const [capacity, setCapacity] = useState(10);
   const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const parsedPrice = getRequiredPrice(price);
+  const priceAboveLimit = isPriceAboveLimit(price);
 
   // Date Selection
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -60,12 +63,12 @@ export const CreateSlotScreen = () => {
   const currentSlot = selectedSlot;
 
   const handleSubmit = async () => {
-    if (!dishTitle || !price) {
+    if (!dishTitle || parsedPrice === null) {
       setModalConfig({
         visible: true,
         type: 'error',
         title: 'Missing Details',
-        message: 'Please fill in dish title and price before creating the slot.',
+        message: 'Please fill in dish title and a valid price before creating the slot.',
         onClose: () => setModalConfig(prev => ({ ...prev, visible: false })),
       });
       return;
@@ -91,7 +94,7 @@ export const CreateSlotScreen = () => {
       formData.append('meal_name', dishTitle);
       formData.append('type', dietaryType === 'Veg' ? 'VEG' : 'NON_VEG');
       formData.append('service_window', finalSlot); // Changed from 'slot' to 'service_window'
-      formData.append('price', price);
+      formData.append('price', String(parsedPrice));
       formData.append('slots_total', capacity.toString());
       formData.append('date', timestamp); // Changed from YYYY-MM-DD to full timestamp as per API docs
       // Note: isAutoAssigned and createdBy are kept only if supported by backend, 
@@ -424,6 +427,9 @@ export const CreateSlotScreen = () => {
               onChangeText={setPrice}
             />
           </View>
+          {priceAboveLimit ? (
+            <Text style={styles.errorHint}>Price cannot exceed ₹{MAX_PRICE.toLocaleString('en-IN')}.</Text>
+          ) : null}
           <Text style={styles.hint}>ⓘ Recommended: ₹220-₹250</Text>
         </View>
 
@@ -451,9 +457,9 @@ export const CreateSlotScreen = () => {
         <ChefTip tip="Dishes with high-quality imagery and realistic meal capacities tend to see 40% higher engagement from diners." />
 
         <TouchableOpacity 
-          style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+          style={[styles.submitBtn, (loading || parsedPrice === null) && styles.submitBtnDisabled]}
           onPress={handleSubmit}
-          disabled={loading}
+          disabled={loading || parsedPrice === null}
         >
           {loading ? (
             <ActivityIndicator color={Colors.background} size="small" />
@@ -687,6 +693,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 6,
     fontStyle: 'italic',
+  },
+  errorHint: {
+    ...Typography.caption,
+    color: Colors.danger,
+    fontSize: 11,
+    marginTop: 6,
+    fontWeight: 'bold',
   },
   stepper: {
     flexDirection: 'row',
