@@ -95,8 +95,6 @@ export const CreateEventScreen = ({ navigation }: any) => {
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [16, 9],
       quality: 0.8,
     });
 

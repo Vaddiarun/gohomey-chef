@@ -41,6 +41,7 @@ export const EditProfileScreen = ({ navigation }: any) => {
   const [kitchenAddress, setKitchenAddress] = useState('');
 
   // Bank
+  const [bankHolderName, setBankHolderName] = useState('');
   const [bankName, setBankName] = useState('');
   const [bankAccount, setBankAccount] = useState('');
   const [ifscCode, setIfscCode] = useState('');
@@ -52,6 +53,7 @@ export const EditProfileScreen = ({ navigation }: any) => {
       setBio(user.bio || '');
       setKitchenName(user.kitchen_name || '');
       setKitchenAddress(user.kitchen_address || '');
+      setBankHolderName(user.bank_holder_name || '');
       setBankName(user.bank_name || '');
       setBankAccount(user.bank_account_number || '');
       setIfscCode(user.ifsc_code || '');
@@ -71,6 +73,7 @@ export const EditProfileScreen = ({ navigation }: any) => {
         bio: bio.trim(),
         kitchen_name: kitchenName.trim(),
         kitchen_address: kitchenAddress.trim(),
+        bank_holder_name: bankHolderName.trim(),
         bank_name: bankName.trim(),
         bank_account_number: bankAccount.trim(),
         ifsc_code: ifscCode.trim().toUpperCase(),
@@ -180,6 +183,7 @@ export const EditProfileScreen = ({ navigation }: any) => {
               <Landmark size={14} color={Colors.warning} />
               <Text style={styles.bankNoticeText}>Accurate bank details ensure timely payouts every Friday.</Text>
             </View>
+            {renderField('ACCOUNT HOLDER NAME', bankHolderName, setBankHolderName, User, { placeholder: 'Name as per bank account' })}
             {renderField('BANK NAME', bankName, setBankName, Building2, { placeholder: 'e.g. State Bank of India' })}
             {renderField('ACCOUNT NUMBER', bankAccount, setBankAccount, CreditCard, { placeholder: 'Your bank account number', keyboardType: 'numeric' })}
             {renderField('IFSC CODE', ifscCode, setIfscCode, Landmark, { placeholder: 'e.g. SBIN0001234', autoCapitalize: 'characters' })}

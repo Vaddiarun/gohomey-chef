@@ -138,12 +138,10 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
       const result = await (useCamera 
         ? ImagePicker.launchCameraAsync({
             quality: 0.55,
-            allowsEditing: true,
           })
         : ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             quality: 0.55,
-            allowsEditing: true,
           })
       );
       

@@ -41,7 +41,7 @@ export const ProfileScreen = () => {
   const getImageUrl = (url?: string) => resolveImageSource(url) ?? undefined;
 
   const menuItems = [
-    { id: '1', title: 'Edit Profile', subtitle: 'Manage personal info & avatar', icon: User, color: Colors.primary },
+    { id: '1', title: 'Profile', subtitle: 'Manage personal info & avatar', icon: User, color: Colors.primary },
     { id: '3', title: 'Help & Support', subtitle: 'gohomeyybengaluru@gmail.com', icon: HelpCircle, color: Colors.cyan },
   ];
 
@@ -56,9 +56,9 @@ export const ProfileScreen = () => {
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
               {user?.kitchen_photo_url ? (
-                <Image 
-                  source={getImageUrl(user.kitchen_photo_url)} 
-                  style={styles.avatarImage} 
+                <Image
+                  source={getImageUrl(user.kitchen_photo_url)}
+                  style={styles.avatarImage}
                 />
               ) : (
                 <User size={40} color={Colors.primary} />
@@ -104,7 +104,7 @@ export const ProfileScreen = () => {
               key={item.id}
               style={styles.menuItem}
               onPress={() => {
-                if (item.title === 'Edit Profile') navigation.navigate('EditProfile');
+                if (item.title === 'Profile') navigation.navigate('EditProfile');
                 if (item.title === 'Help & Support') handleHelpAndSupport();
               }}
             >

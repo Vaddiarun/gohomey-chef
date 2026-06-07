@@ -61,8 +61,6 @@ export const FuelWeighInScreen = () => {
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
       quality: 0.85,
     });
     if (!result.canceled) setImage(result.assets[0].uri);
@@ -81,8 +79,6 @@ export const FuelWeighInScreen = () => {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
       quality: 0.85,
     });
     if (!result.canceled) setImage(result.assets[0].uri);

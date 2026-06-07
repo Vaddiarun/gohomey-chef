@@ -15,6 +15,7 @@ type UserProfile = {
   kitchen_photo_url?: string;
   bio?: string;
   expertise?: string[];
+  bank_holder_name?: string;
   bank_name?: string;
   bank_account_number?: string;
   ifsc_code?: string;
@@ -85,6 +86,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const url = `${process.env.EXPO_PUBLIC_API_URL}chefs/profile`;
       console.log('API Request: PATCH', url);
+      console.log('API Request Body (Update Profile):', JSON.stringify(data, null, 2));
       const response = await fetch(url, {
         method: 'PATCH',
         headers: {
