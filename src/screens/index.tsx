@@ -22,3 +22,4 @@ export * from './SubscriptionScreen';
 export * from './FuelDashboardScreen';
 export * from './FuelSubscribersScreen';
 export * from './FuelWeighInScreen';
+export * from './FuelPlanDetailScreen';

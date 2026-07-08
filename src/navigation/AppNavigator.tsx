@@ -46,6 +46,7 @@ import {
   FuelDashboardScreen,
   FuelSubscribersScreen,
   FuelWeighInScreen,
+  FuelPlanDetailScreen,
 } from '../screens';
 
 const Tab = createBottomTabNavigator();
@@ -235,6 +236,11 @@ function AppNavigatorInner() {
             headerTintColor: Colors.text,
             headerTitleStyle: { fontWeight: 'bold' as const, fontSize: 18, color: Colors.text },
           }}
+        />
+        <Stack.Screen
+          name="FuelPlanDetail"
+          component={FuelPlanDetailScreen}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

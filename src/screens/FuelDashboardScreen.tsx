@@ -587,7 +587,14 @@ export const FuelDashboardScreen = () => {
                 : plan.delivery_time_slots ?? [];
 
               return (
-                <View key={plan.id} style={styles.planRow}>
+                <TouchableOpacity
+                  key={plan.id}
+                  style={styles.planRow}
+                  activeOpacity={0.7}
+                  onPress={() =>
+                    navigation.navigate('FuelPlanDetail', { plan, enabled, slots })
+                  }
+                >
                   <View style={styles.planRowTop}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.fuelPlanName}>{plan.name}</Text>
@@ -606,6 +613,7 @@ export const FuelDashboardScreen = () => {
                         </Text>
                       )}
                     </TouchableOpacity>
+                    <ChevronRight size={16} color={Colors.textSecondary} />
                   </View>
 
                   {slots.length > 0 && (
@@ -618,7 +626,7 @@ export const FuelDashboardScreen = () => {
                       ))}
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
               );
             })
           )}

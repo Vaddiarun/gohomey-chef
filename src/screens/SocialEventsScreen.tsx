@@ -62,8 +62,8 @@ export const SocialEventsScreen = ({ navigation }: any) => {
   const renderHeader = () => (
     <View style={styles.header}>
       <View>
-        <Text style={Typography.h1}>Social Events</Text>
-        <Text style={Typography.caption}>Connect and grow together</Text>
+        <Text style={Typography.h1}>Social Events & Parties</Text>
+        <Text style={Typography.caption}>Host in-house parties or custom socials. Neighbors can book tickets to attend.</Text>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <TouchableOpacity 

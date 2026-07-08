@@ -4,7 +4,19 @@
       "Bash(npx expo *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://gohomeyy-backend.onrender.com/api/v1/fuel/chef/fulfillments\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://gohomeyy-backend.onrender.com/api/v1/fuel/chef/subscriptions\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://gohomeyy-backend.onrender.com/api/v1/fuel/now/chef-stream\")"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://gohomeyy-backend.onrender.com/api/v1/fuel/now/chef-stream\")",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/react-native-safe-area-context/package.json'\\).version\\)\")",
+      "Bash(node -e \"console.log\\(require\\('./gohomey-chef/node_modules/react-native-safe-area-context/package.json'\\).version\\)\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('expo:', p.dependencies.expo\\); console.log\\('metro' in p.dependencies || 'metro' in \\(p.devDependencies||{}\\)\\);\")",
+      "Bash(node -e \"console.log\\(require.resolve\\('expo/metro-config'\\)\\)\")",
+      "Bash(node -e \"console.log\\(require.resolve\\('metro-config/src/defaults/exclusionList'\\)\\)\")",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/metro-config/package.json'\\).version\\)\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const p=JSON.parse\\(fs.readFileSync\\(0\\)\\);console.log\\(JSON.stringify\\(p.exports,null,2\\)\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"console.log\\(require\\('metro-config/private/defaults/exclusionList'\\)\\)\")",
+      "Bash(cat)",
+      "Bash(node /tmp/test_regex2.js)",
+      "Bash(node \"C:/Users/aruns/AppData/Local/Temp/claude/c--gohomey-chef/5c0d2f6c-9ff8-4672-b975-fd32c8c77b10/scratchpad/test_metro_blocklist.js\")"
     ]
   }
 }

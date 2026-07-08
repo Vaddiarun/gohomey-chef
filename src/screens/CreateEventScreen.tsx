@@ -166,17 +166,17 @@ export const CreateEventScreen = ({ navigation }: any) => {
           ) : (
             <View style={styles.imagePlaceholder}>
               <Camera size={32} color={Colors.textSecondary} />
-              <Text style={styles.imagePlaceholderText}>Add Event Cover Photo</Text>
+              <Text style={styles.imagePlaceholderText}>Add Party Cover Photo</Text>
             </View>
           )}
         </TouchableOpacity>
 
         {/* Basic Info */}
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Event Title *</Text>
+          <Text style={styles.label}>Event/Party Title *</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g. Backyard BBQ Night"
+            placeholder="e.g. Tacos & Beats House Party"
             placeholderTextColor={Colors.textSecondary}
             value={title}
             onChangeText={setTitle}
@@ -187,7 +187,7 @@ export const CreateEventScreen = ({ navigation }: any) => {
           <Text style={styles.label}>Description *</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
-            placeholder="Tell participants what to expect..."
+            placeholder="Describe the party setup, whether it is in your home kitchen, rooftop, or custom venue, and what guests should expect..."
             placeholderTextColor={Colors.textSecondary}
             value={description}
             onChangeText={setDescription}
