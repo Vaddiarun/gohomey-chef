@@ -28,6 +28,9 @@ import {
   Utensils,
   Wifi,
   WifiOff,
+  Phone,
+  PackageCheck,
+  Truck,
 } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
 import { format } from 'date-fns';
@@ -37,9 +40,16 @@ interface Fulfillment {
   fulfillment_date: string;
   delivery_time_slot: string;
   delivery_status: string;
+  menu: {
+    day_number: number;
+    period: 'breakfast' | 'lunch' | 'dinner' | null;
+    item_name: string | null;
+    time_slot: string;
+    nutrition?: { calories: number; protein: number; carbs: number; fat: number };
+  } | null;
   subscription: {
     user: { name: string; phone: string };
-    plan: { name: string; menu_json: any };
+    plan: { name: string };
   };
 }
 
@@ -81,8 +91,8 @@ interface FuelNowOffer {
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   SCHEDULED: { label: 'Scheduled', color: Colors.cyan, bg: 'rgba(34, 211, 238, 0.1)' },
   COOKING: { label: 'Cooking', color: Colors.warning, bg: 'rgba(250, 204, 21, 0.1)' },
-  READY_FOR_PICKUP: { label: 'Ready', color: Colors.primary, bg: 'rgba(74, 222, 128, 0.1)' },
-  PICKED_UP: { label: 'Picked Up', color: Colors.primary, bg: 'rgba(74, 222, 128, 0.08)' },
+  READY_FOR_PICKUP: { label: 'Ready for pickup', color: Colors.primary, bg: 'rgba(74, 222, 128, 0.1)' },
+  PICKED_UP: { label: 'Picked up', color: Colors.primary, bg: 'rgba(74, 222, 128, 0.08)' },
   DELIVERED: { label: 'Delivered', color: Colors.primary, bg: 'rgba(74, 222, 128, 0.08)' },
   PAUSED: { label: 'Paused', color: Colors.textSecondary, bg: 'rgba(156, 163, 175, 0.1)' },
   MISSED: { label: 'Missed', color: Colors.danger, bg: 'rgba(239, 68, 68, 0.1)' },
@@ -731,11 +741,13 @@ export const FuelDashboardScreen = () => {
                   <View key={item.id} style={styles.fulfillmentCard}>
                     <View style={styles.fulfillmentTop}>
                       <View style={{ flex: 1 }}>
+                        {item.menu?.item_name ? (
+                          <Text style={styles.dishName}>{item.menu.item_name}</Text>
+                        ) : (
+                          <Text style={styles.dishNameEmpty}>Menu not set</Text>
+                        )}
                         <Text style={styles.planName}>
                           {item.subscription?.plan?.name ?? 'Fuel Plan'}
-                        </Text>
-                        <Text style={styles.customerName}>
-                          {item.subscription?.user?.name ?? 'Customer'}
                         </Text>
                       </View>
                       <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
@@ -743,6 +755,20 @@ export const FuelDashboardScreen = () => {
                           {cfg.label}
                         </Text>
                       </View>
+                    </View>
+
+                    <View style={styles.customerRow}>
+                      <Text style={styles.customerName}>
+                        {item.subscription?.user?.name ?? 'Customer'}
+                      </Text>
+                      {item.subscription?.user?.phone && (
+                        <View style={styles.customerPhoneRow}>
+                          <Phone size={11} color={Colors.textSecondary} />
+                          <Text style={styles.customerPhoneText}>
+                            {item.subscription.user.phone}
+                          </Text>
+                        </View>
+                      )}
                     </View>
 
                     {item.delivery_status === 'SCHEDULED' && (
@@ -760,7 +786,10 @@ export const FuelDashboardScreen = () => {
                       <TouchableOpacity
                         style={[styles.actionBtn, styles.actionBtnYellow]}
                         onPress={() =>
-                          navigation.navigate('FuelWeighIn', { fulfillmentId: item.id })
+                          navigation.navigate('FuelWeighIn', {
+                            fulfillmentId: item.id,
+                            itemName: item.menu?.item_name,
+                          })
                         }
                         activeOpacity={0.8}
                       >
@@ -770,9 +799,31 @@ export const FuelDashboardScreen = () => {
                     )}
 
                     {item.delivery_status === 'READY_FOR_PICKUP' && (
+                      <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={() => handleStatusUpdate(item.id, 'PICKED_UP')}
+                        activeOpacity={0.8}
+                      >
+                        <PackageCheck size={13} color={Colors.background} />
+                        <Text style={styles.actionBtnText}>Mark Picked Up</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {item.delivery_status === 'PICKED_UP' && (
+                      <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={() => handleStatusUpdate(item.id, 'DELIVERED')}
+                        activeOpacity={0.8}
+                      >
+                        <Truck size={13} color={Colors.background} />
+                        <Text style={styles.actionBtnText}>Mark Delivered</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {item.delivery_status === 'DELIVERED' && (
                       <View style={styles.readyRow}>
                         <Check size={13} color={Colors.primary} />
-                        <Text style={styles.readyRowText}>Ready for Pickup</Text>
+                        <Text style={styles.readyRowText}>Delivered</Text>
                       </View>
                     )}
                   </View>
@@ -1019,9 +1070,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  fulfillmentTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
-  planName: { ...Typography.body, fontWeight: '700', marginBottom: 2 },
-  customerName: { ...Typography.caption },
+  fulfillmentTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
+  dishName: { ...Typography.body, fontWeight: '700', fontSize: 15, marginBottom: 2 },
+  dishNameEmpty: {
+    ...Typography.body,
+    fontWeight: '700',
+    fontSize: 15,
+    marginBottom: 2,
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
+  },
+  planName: { ...Typography.caption },
+  customerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  customerName: { ...Typography.caption, fontWeight: '600', color: Colors.text },
+  customerPhoneRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  customerPhoneText: { ...Typography.caption, fontSize: 11 },
   statusBadge: {
     borderRadius: 8,
     paddingHorizontal: 8,

@@ -16,7 +16,36 @@
       "Bash(node -e \"console.log\\(require\\('metro-config/private/defaults/exclusionList'\\)\\)\")",
       "Bash(cat)",
       "Bash(node /tmp/test_regex2.js)",
-      "Bash(node \"C:/Users/aruns/AppData/Local/Temp/claude/c--gohomey-chef/5c0d2f6c-9ff8-4672-b975-fd32c8c77b10/scratchpad/test_metro_blocklist.js\")"
+      "Bash(node \"C:/Users/aruns/AppData/Local/Temp/claude/c--gohomey-chef/5c0d2f6c-9ff8-4672-b975-fd32c8c77b10/scratchpad/test_metro_blocklist.js\")",
+      "PowerShell(Get-PSDrive C | Select-Object Used,Free | Format-List; \"---\"; Get-CimInstance Win32_LogicalDisk -Filter \"DeviceID='C:'\" | Select-Object @{n='FreeGB';e={[math]::Round\\($_.FreeSpace/1GB,2\\)}}, @{n='SizeGB';e={[math]::Round\\($_.Size/1GB,2\\)}})",
+      "PowerShell(cmd /c \"dir C:\\\\gohomey_chef\")",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"Name='\\\\''java.exe'\\\\''\" | Where-Object { $_.CommandLine -like '\\\\''*gradlew*'\\\\'' -or $_.CommandLine -like '\\\\''*bundleRelease*'\\\\'' } | Select-Object ProcessId')",
+      "Bash(./gradlew bundleRelease --console=plain)",
+      "Bash(\"/c/Program Files/Java/jdk-17/bin/jarsigner.exe\" -verify -verbose -certs android/app/build/outputs/bundle/release/app-release.aab)",
+      "Bash(\"/c/Program Files/Java/jdk-17/bin/jarsigner.exe\" -verify -verbose -certs app/build/outputs/bundle/release/app-release.aab)",
+      "Bash(./gradlew --stop)",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"Name='\\\\''java.exe'\\\\''\" | Where-Object { $_.CommandLine -like '\\\\''*GradleDaemon*'\\\\'' -or $_.CommandLine -like '\\\\''*gradlew*'\\\\'' } | Select-Object ProcessId,CommandLine | Format-List')",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"Name='\\\\''java.exe'\\\\''\" | Select-Object ProcessId,@{n='\\\\''Cmd'\\\\'';e={$_.CommandLine.Substring\\(0,[Math]::Min\\(140,$_.CommandLine.Length\\)\\)}} | Format-Table -AutoSize -Wrap')",
+      "Bash(powershell -NoProfile -Command \"Get-CimInstance Win32_Process -Filter \\\\\"Name='java.exe'\\\\\" | Select-Object ProcessId\")",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"Name='\\\\''java.exe'\\\\''\" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Remove-Item -LiteralPath '\\\\''C:\\\\gohomey_chef\\\\android\\\\app\\\\.gradle'\\\\'' -Recurse -Force -ErrorAction SilentlyContinue')",
+      "Bash(powershell -NoProfile -Command ' *)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='java.exe' or Name='powershell.exe' or Name='pwsh.exe' or Name='cmd.exe'\")",
+      "PowerShell(\"---processes---\")",
+      "PowerShell(Get-CimInstance Win32_LogicalDisk -Filter \"DeviceID='C:'\" | Select-Object @{n='FreeGB';e={[math]::Round\\($_.FreeSpace/1GB,2\\)}})",
+      "Bash(xargs -I{} sh -c 'echo === {} ===; cat {}')",
+      "Bash(\"C:\\\\Users\\\\aruns\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s 4e236c2 shell getprop ro.product.manufacturer)",
+      "Bash(\"C:\\\\Users\\\\aruns\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s 4e236c2 shell getprop ro.product.model)",
+      "Bash(\"C:\\\\Users\\\\aruns\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s 4e236c2 shell getprop ro.build.version.release)",
+      "Bash(\"C:\\\\Users\\\\aruns\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s 4e236c2 shell pm list packages)",
+      "Bash(find /c/gohomey_user -maxdepth 4 -iname \"*icon*\" 2>/dev/null | grep -v node_modules | head -50)",
+      "Read(//c/gohomey_user/**)",
+      "Read(//c/gohomey_user/gohomey-user/assets/**)",
+      "Bash(./gradlew.bat bundleRelease --no-daemon)",
+      "Bash(tee /c/gohomey_chef/build_release_log.txt)",
+      "Bash(grep -v \"node_modules\\\\|\\\\.git/\\\\|/\\\\.expo/\\\\|android/app/build/\\\\|android/app/\\\\.cxx/\" \"C:\\\\Users\\\\aruns\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--gohomey-chef\\\\5d1e4fd3-966b-46fa-96bc-60ed656f65b2\\\\tasks\\\\bd1wi6d4l.output\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\aruns\\.gradle"
     ]
   }
 }

@@ -24,7 +24,7 @@ export const FuelWeighInScreen = () => {
   const navigation = useNavigation<any>();
   const route = useRoute();
   const { token } = useAuth();
-  const { fulfillmentId } = (route.params as any) ?? {};
+  const { fulfillmentId, itemName } = (route.params as any) ?? {};
 
   const [image, setImage] = useState<string | null>(null);
   const [grams, setGrams] = useState('');
@@ -182,6 +182,7 @@ export const FuelWeighInScreen = () => {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.infoTitle}>Weigh-In Proof</Text>
+              {itemName && <Text style={styles.dishNameLabel}>{itemName}</Text>}
               <Text style={styles.infoSubtitle}>
                 Place the meal on a scale, frame both together, and enter the weight.
               </Text>
@@ -280,6 +281,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   infoTitle: { ...Typography.h3, marginBottom: 4 },
+  dishNameLabel: { ...Typography.body, color: Colors.primary, fontWeight: '700', marginBottom: 4 },
   infoSubtitle: { ...Typography.caption, lineHeight: 18 },
 
   // Capture area
