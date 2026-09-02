@@ -22,6 +22,7 @@ import {
   Check,
 } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
+import { useAuth } from '../context/AuthContext';
 import MapView, { Marker, Region } from '../components/PlatformMap';
 import { LocationSearchInput } from '../components/LocationSearchInput';
 import * as Location from 'expo-location';
@@ -44,6 +45,7 @@ const PRESET_APPLIANCES = [
 ];
 
 export const RegisterStep2 = ({ navigation, route }: any) => {
+  const { updateRegistrationStep } = useAuth();
   const [kitchenName, setKitchenName] = useState('');
   const [capacity, setCapacity] = useState('12');
   const [appliances, setAppliances] = useState<string[]>([]);
@@ -92,6 +94,16 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
       return;
     }
 
+    if (!token) {
+      Toast.show({
+        type: 'error',
+        text1: 'Session expired',
+        text2: 'Please verify your mobile number to continue registration.',
+      });
+      navigation.navigate('Login');
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}chefs/register/step-2`, {
@@ -99,7 +111,7 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : '',
+          'Authorization': `Bearer ${token}`,
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -115,10 +127,23 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.log('Step 2 API Failed. Status:', response.status);
+        if (response.status === 401) {
+          Toast.show({
+            type: 'error',
+            text1: 'Session expired',
+            text2:
+              errorData.code === 'TOKEN_EXPIRED'
+                ? 'Your registration session expired. Please verify your number again.'
+                : 'Please verify your number again.',
+          });
+          navigation.navigate('Login');
+          return;
+        }
         throw new Error(errorData.message || `Failed to submit Step 2 (Status: ${response.status})`);
       }
 
       console.log('Step 2 API Success');
+      await updateRegistrationStep(3);
       Toast.show({
         type: 'success',
         text1: 'Success',

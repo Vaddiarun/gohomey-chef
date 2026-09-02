@@ -101,20 +101,65 @@ function TabNavigator() {
 }
 
 function AuthNavigator() {
+  const { pendingRegistration } = useAuth();
+
+  // Resume a half-finished signup (short-lived registration token still valid).
+  const initialRouteName = pendingRegistration
+    ? pendingRegistration.step >= 3
+      ? 'RegisterStep3'
+      : pendingRegistration.step === 2
+      ? 'RegisterStep2'
+      : 'RegisterStep1'
+    : 'Login';
+
   return (
-    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+    <AuthStack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRouteName}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Verification" component={VerificationScreen} />
-      <AuthStack.Screen name="RegisterStep1" component={RegisterStep1} />
-      <AuthStack.Screen name="RegisterStep2" component={RegisterStep2} />
-      <AuthStack.Screen name="RegisterStep3" component={RegisterStep3} />
+      <AuthStack.Screen
+        name="RegisterStep1"
+        component={RegisterStep1}
+        initialParams={pendingRegistration ? { token: pendingRegistration.token, phoneNumber: pendingRegistration.phoneNumber } : undefined}
+      />
+      <AuthStack.Screen
+        name="RegisterStep2"
+        component={RegisterStep2}
+        initialParams={pendingRegistration ? { token: pendingRegistration.token, phoneNumber: pendingRegistration.phoneNumber } : undefined}
+      />
+      <AuthStack.Screen
+        name="RegisterStep3"
+        component={RegisterStep3}
+        initialParams={pendingRegistration ? { token: pendingRegistration.token, phoneNumber: pendingRegistration.phoneNumber } : undefined}
+      />
       <AuthStack.Screen name="RegistrationStatus" component={RegistrationStatusScreen} />
     </AuthStack.Navigator>
   );
 }
 
+/** Authenticated chef whose application is not yet APPROVED — no dashboard access. */
+function PendingReviewNavigator() {
+  const { user } = useAuth();
+  const status = user?.application_status ?? user?.status;
+  return (
+    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+      <AuthStack.Screen
+        name="RegistrationStatus"
+        component={RegistrationStatusScreen}
+        initialParams={{ status }}
+      />
+    </AuthStack.Navigator>
+  );
+}
+
 function AppNavigatorInner() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  // Signed in, but the chef application is still in review / rejected: keep them
+  // on the status screen rather than the (unusable) dashboard. The API field is
+  // `application_status`; only a positively-known non-APPROVED value gates.
+  const chefStatus = user?.application_status ?? user?.status;
+  const pendingReview =
+    isAuthenticated && !!chefStatus && chefStatus !== 'APPROVED';
 
   if (isLoading) {
     return (
@@ -129,6 +174,8 @@ function AppNavigatorInner() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isAuthenticated ? (
           <Stack.Screen name="Auth" component={AuthNavigator} />
+        ) : pendingReview ? (
+          <Stack.Screen name="PendingReview" component={PendingReviewNavigator} />
         ) : (
           <>
             <Stack.Screen name="Main" component={TabNavigator} />

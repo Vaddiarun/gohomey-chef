@@ -116,7 +116,9 @@ export const ProofUploadScreen = () => {
     }
 
     let result = await ImagePicker.launchCameraAsync({
-      quality: 1,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.3,
     });
 
     if (!result.canceled) {

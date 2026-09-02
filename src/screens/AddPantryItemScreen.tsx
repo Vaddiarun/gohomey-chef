@@ -157,7 +157,9 @@ export const AddPantryItemScreen = () => {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 1,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.3,
     });
 
     if (!result.canceled) {
@@ -179,7 +181,9 @@ export const AddPantryItemScreen = () => {
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      quality: 1,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.3,
     });
 
     if (!result.canceled) {

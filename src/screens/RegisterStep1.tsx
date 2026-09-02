@@ -21,8 +21,10 @@ import {
   Info
 } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
+import { useAuth } from '../context/AuthContext';
 
 export const RegisterStep1 = ({ navigation, route }: any) => {
+  const { updateRegistrationStep } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState(route?.params?.phoneNumber || '');
@@ -39,6 +41,17 @@ export const RegisterStep1 = ({ navigation, route }: any) => {
       return;
     }
 
+    const token = route.params?.token;
+    if (!token) {
+      Toast.show({
+        type: 'error',
+        text1: 'Session expired',
+        text2: 'Please verify your mobile number to continue registration.',
+      });
+      navigation.navigate('Login');
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}chefs/register/step-1`, {
@@ -46,7 +59,7 @@ export const RegisterStep1 = ({ navigation, route }: any) => {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Authorization': route.params?.token ? `Bearer ${route.params.token}` : '',
+          'Authorization': `Bearer ${token}`,
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -61,16 +74,29 @@ export const RegisterStep1 = ({ navigation, route }: any) => {
         const errorData = await response.json().catch(() => ({}));
         console.log('Step 1 API Failed. Status:', response.status);
         console.log('Error Data:', JSON.stringify(errorData, null, 2));
+        if (response.status === 401) {
+          Toast.show({
+            type: 'error',
+            text1: 'Session expired',
+            text2:
+              errorData.code === 'TOKEN_EXPIRED'
+                ? 'Your registration session expired. Please verify your number again.'
+                : 'Please verify your number again.',
+          });
+          navigation.navigate('Login');
+          return;
+        }
         throw new Error(errorData.message || `Failed to submit Step 1 (Status: ${response.status})`);
       }
 
       console.log('Step 1 API Success');
+      await updateRegistrationStep(2);
       Toast.show({
         type: 'success',
         text1: 'Success',
         text2: 'Personal info saved successfully.',
       });
-      navigation.navigate('RegisterStep2', { email, token: route.params?.token, phoneNumber: phone });
+      navigation.navigate('RegisterStep2', { email, token, phoneNumber: phone });
     } catch (error: any) {
       console.log('Step 1 API Error caught:', error.message);
       Toast.show({

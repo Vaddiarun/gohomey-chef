@@ -79,16 +79,21 @@ export const RegistrationStatusScreen = ({ navigation, route }: any) => {
   };
 
   const config = getStatusConfig();
-  const { login } = useAuth();
-  const token = route?.params?.token;
+  const { login, logout, fetchProfile, token: sessionToken } = useAuth();
+  const token = route?.params?.token || sessionToken;
+
+  const handleCheckForUpdates = async () => {
+    await fetchProfile();
+    Toast.show({ type: 'info', text1: 'Status refreshed' });
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <Text style={styles.brandTitle}>GO HOMEYY</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.logoutBtn}
-          onPress={() => navigation.navigate('Login')}
+          onPress={() => logout()}
         >
           <LogOut size={20} color={Colors.textSecondary} />
         </TouchableOpacity>
@@ -140,12 +145,9 @@ export const RegistrationStatusScreen = ({ navigation, route }: any) => {
             <Text style={styles.refreshText}>GO TO DASHBOARD</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.refreshBtn}
-            onPress={() => {
-              // Logic to re-check status could go here
-              Toast.show({ type: 'info', text1: 'Status Updated', text2: 'No changes detected yet.' });
-            }}
+            onPress={handleCheckForUpdates}
           >
             <RefreshCw size={20} color={Colors.background} style={{ marginRight: 8 }} />
             <Text style={styles.refreshText}>CHECK FOR UPDATES</Text>

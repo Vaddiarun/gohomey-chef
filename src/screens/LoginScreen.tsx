@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -17,27 +17,27 @@ import { Colors, Spacing, Typography } from '../theme';
 import { Utensils, ArrowRight } from 'lucide-react-native';
 import { ChefTip } from '../components/ChefTip';
 import Toast from 'react-native-toast-message';
+import { sendOtp, mapOtpError } from '../services/otpService';
+import { useAuth } from '../context/AuthContext';
 
 export const LoginScreen = ({ navigation }: any) => {
+  const { sessionMessage, clearSessionMessage } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Surface why the user landed back here (expired / invalid session).
+  useEffect(() => {
+    if (sessionMessage) {
+      Toast.show({ type: 'info', text1: 'Sign in required', text2: sessionMessage });
+      clearSessionMessage();
+    }
+  }, [sessionMessage]);
 
   const handleGetOtp = async () => {
     if (phoneNumber.length >= 10) {
       setLoading(true);
       try {
-        const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}auth/send-otp`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ phone: `+91${phoneNumber}` }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.log('Login API Failed:', errorData);
-          throw new Error(errorData.message || 'Failed to send OTP');
-        }
+        await sendOtp(`+91${phoneNumber}`);
 
         console.log('Login API Success');
         Toast.show({
@@ -47,11 +47,11 @@ export const LoginScreen = ({ navigation }: any) => {
         });
         navigation.navigate('Verification', { phoneNumber });
       } catch (error: any) {
-        console.log('Login API Error:', error.message);
+        console.log('Login API Error:', error.code || error.message);
         Toast.show({
           type: 'error',
           text1: 'Error',
-          text2: error.message || 'Something went wrong',
+          text2: mapOtpError(error),
         });
       } finally {
         setLoading(false);
@@ -113,7 +113,20 @@ export const LoginScreen = ({ navigation }: any) => {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.applyLink} onPress={() => navigation.navigate('RegisterStep1')}>
+            <TouchableOpacity
+              style={styles.applyLink}
+              onPress={() => {
+                if (phoneNumber.length < 10) {
+                  Toast.show({
+                    type: 'info',
+                    text1: 'Enter your mobile number',
+                    text2: 'We verify your number by OTP before registration.',
+                  });
+                  return;
+                }
+                handleGetOtp();
+              }}
+            >
               <Text style={styles.applyText}>Don't have an account? <Text style={styles.applyHighlight}>Apply to Join</Text></Text>
             </TouchableOpacity>
           </View>

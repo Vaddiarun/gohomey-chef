@@ -2,9 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npx expo *)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://gohomeyy-backend.onrender.com/api/v1/fuel/chef/fulfillments\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://gohomeyy-backend.onrender.com/api/v1/fuel/chef/subscriptions\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://gohomeyy-backend.onrender.com/api/v1/fuel/now/chef-stream\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.gohomeyy.store/api/v1/fuel/chef/fulfillments\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.gohomeyy.store/api/v1/fuel/chef/subscriptions\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.gohomeyy.store/api/v1/fuel/now/chef-stream\")",
       "Bash(node -e \"console.log\\(require\\('./node_modules/react-native-safe-area-context/package.json'\\).version\\)\")",
       "Bash(node -e \"console.log\\(require\\('./gohomey-chef/node_modules/react-native-safe-area-context/package.json'\\).version\\)\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('expo:', p.dependencies.expo\\); console.log\\('metro' in p.dependencies || 'metro' in \\(p.devDependencies||{}\\)\\);\")",

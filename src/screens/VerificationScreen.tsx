@@ -18,9 +18,11 @@ import { Colors, Spacing, Typography } from '../theme';
 import { ChevronLeft, Utensils, ShieldCheck } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import Toast from 'react-native-toast-message';
+import { verifyOtp, sendOtp, mapOtpError } from '../services/otpService';
+import { readAuthPayload, isEstablishedChef } from '../services/api';
 
 export const VerificationScreen = ({ navigation, route }: any) => {
-  const { login } = useAuth();
+  const { login, beginRegistration } = useAuth();
   const { phoneNumber } = route.params || { phoneNumber: '98765 43210' };
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(59);
@@ -84,19 +86,7 @@ export const VerificationScreen = ({ navigation, route }: any) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}auth/verify-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ phone: formattedPhone, otp: fullOtp }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        console.log('Verify API Failed:', data);
-        throw new Error(data.message || 'Failed to verify OTP');
-      }
+      const data = await verifyOtp(formattedPhone, fullOtp);
 
       console.log('Verify API Success:', data);
       Toast.show({
@@ -104,42 +94,38 @@ export const VerificationScreen = ({ navigation, route }: any) => {
         text1: 'Verification Successful',
       });
 
-      // Navigate based on whether the user is new or registration is incomplete
-      const isNewUser = data.isNewUser || data.is_new_user;
-      const status = data.applicationStatus || data.application_status;
-      const step = data.registrationStep || data.registration_step;
-      const redirectToStatus = data.redirectToStatus || data.redirect_to_status;
-      const token = data.token;
+      const payload = readAuthPayload(data);
+      const { token, user, registrationStep, applicationStatus } = payload;
 
-      if (status === 'APPROVED') {
-        console.log('Navigation: APPROVED chef, heading to Dashboard');
-        login(token); // Navigate to Main Dashboard
-        return;
-      }
-
-      if (status === 'DRAFT' || (isNewUser && !status)) {
-        console.log('Navigation: DRAFT/new chef, heading to Step', step);
-        // Scenario B: Returning Chef (Incomplete Registration) or new user
-        if (step === 2) {
-          navigation.navigate('RegisterStep2', { token, phoneNumber });
-        } else if (step === 3) {
+      // Not an established chef yet — brand-new number, an existing role:USER
+      // account, or a chef with an unfinished draft. The token is a USER-role
+      // registration token (it will 403 on chef routes, by design), so persist
+      // it for resume and drop into the signup flow — never the dashboard.
+      if (!isEstablishedChef(payload)) {
+        const step = registrationStep || 1;
+        console.log('Navigation: not-yet-a-chef, heading to registration step', step);
+        await beginRegistration({ token, step, phoneNumber });
+        if (step === 3) {
           navigation.navigate('RegisterStep3', { token, phoneNumber });
+        } else if (step === 2) {
+          navigation.navigate('RegisterStep2', { token, phoneNumber });
         } else {
           navigation.navigate('RegisterStep1', { token, phoneNumber });
         }
         return;
       }
 
-      // Default: Scenario C: Returning Chef (Review Process)
-      // Covers PENDING_REVIEW, PHONE_VETTING, KITCHEN_AUDIT, REJECTED
-      console.log('Navigation: STATUS screen, status:', status, 'redirectToStatus:', redirectToStatus);
-      navigation.navigate('RegistrationStatus', { status, token });
+      // Established chef: store the real session. The navigator then routes to
+      // the dashboard (APPROVED) or the review status screen (PENDING_REVIEW,
+      // PHONE_VETTING, KITCHEN_AUDIT, REJECTED) based on the profile status.
+      console.log('Navigation: established chef, status:', applicationStatus);
+      await login(token, user);
     } catch (error: any) {
-      console.log('Verify API Error:', error.message);
+      console.log('Verify API Error:', error.code || error.message);
       Toast.show({
         type: 'error',
         text1: 'Verification Failed',
-        text2: error.message || 'Invalid OTP',
+        text2: mapOtpError(error),
       });
     } finally {
       setLoading(false);
@@ -163,18 +149,7 @@ export const VerificationScreen = ({ navigation, route }: any) => {
     setResendLoading(true);
     try {
       console.log('Resend OTP API Request:', formattedPhone);
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}auth/send-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ phone: formattedPhone }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.log('Resend OTP API Failed:', errorData);
-        throw new Error(errorData.message || 'Failed to resend OTP');
-      }
+      await sendOtp(formattedPhone);
 
       setOtp(['', '', '', '', '', '']);
       setTimer(59);
@@ -185,11 +160,11 @@ export const VerificationScreen = ({ navigation, route }: any) => {
         text2: 'Please check your messages.',
       });
     } catch (error: any) {
-      console.log('Resend OTP API Error:', error.message);
+      console.log('Resend OTP API Error:', error.code || error.message);
       Toast.show({
         type: 'error',
         text1: 'Resend Failed',
-        text2: error.message || 'Could not resend OTP',
+        text2: mapOtpError(error),
       });
     } finally {
       setResendLoading(false);

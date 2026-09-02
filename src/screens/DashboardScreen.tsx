@@ -51,7 +51,7 @@ interface DashboardData {
 
 export const DashboardScreen = () => {
   const navigation = useNavigation<any>();
-  const { token, user } = useAuth();
+  const { token, user, handleUnauthorized } = useAuth();
   
   useEffect(() => {
     if (user) {
@@ -151,6 +151,13 @@ export const DashboardScreen = () => {
           'Content-Type': 'application/json'
         }
       });
+
+      if (response.status === 401 || response.status === 403) {
+        const errData = await response.json().catch(() => ({}));
+        console.log('API Error (Dashboard):', response.status, errData?.message || errData?.code);
+        handleUnauthorized(errData);
+        return;
+      }
 
       if (!response.ok) {
         const errorText = await response.text();

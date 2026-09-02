@@ -27,6 +27,8 @@ import {
 import Toast from 'react-native-toast-message';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import { useAuth } from '../context/AuthContext';
+import { refreshSession, readAuthPayload } from '../services/api';
 
 type FileAsset = {
   uri: string;
@@ -47,6 +49,17 @@ const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs = S
     });
   } finally {
     clearTimeout(timeoutId);
+  }
+};
+
+/** Best-effort byte size of a local file:// uri (used only for logging / a warning). */
+const getUriSize = async (uri: string): Promise<number> => {
+  try {
+    const res = await fetch(uri);
+    const blob = await res.blob();
+    return blob.size;
+  } catch {
+    return 0;
   }
 };
 
@@ -86,6 +99,7 @@ const logStep3Curl = (
 };
 
 export const RegisterStep3 = ({ navigation, route }: any) => {
+  const { login } = useAuth();
   const [govId, setGovId] = useState<FileAsset | null>(null);
   const [safetyCert, setSafetyCert] = useState<FileAsset | null>(null);
   const [kitchenPhoto, setKitchenPhoto] = useState<FileAsset | null>(null);
@@ -135,13 +149,18 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
         }
       }
 
-      const result = await (useCamera 
+      // Keep uploads small — the step-3 endpoint / proxy rejects large bodies
+      // (HTTP 413). Low quality + a forced crop re-encodes the photo well below
+      // multi-MB. allowsEditing also lets the chef frame the document.
+      const result = await (useCamera
         ? ImagePicker.launchCameraAsync({
-            quality: 0.55,
+            quality: 0.3,
+            allowsEditing: true,
           })
         : ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
-            quality: 0.55,
+            quality: 0.3,
+            allowsEditing: true,
           })
       );
       
@@ -240,10 +259,34 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
       return;
     }
 
+    if (!jwtToken) {
+      Toast.show({
+        type: 'error',
+        text1: 'Session expired',
+        text2: 'Please verify your mobile number to continue registration.',
+      });
+      navigation.navigate('Login');
+      return;
+    }
+
     setLoading(true);
     try {
+      // Surface the real payload size — a 413 comes from here being too big.
+      const sizes = await Promise.all([
+        getUriSize(govId.uri),
+        getUriSize(safetyCert.uri),
+        getUriSize(kitchenPhoto.uri),
+      ]);
+      const totalBytes = sizes.reduce((a, b) => a + b, 0);
+      console.log('Step 3 upload sizes (KB):', {
+        government_id: Math.round(sizes[0] / 1024),
+        food_safety_cert: Math.round(sizes[1] / 1024),
+        kitchen_photo: Math.round(sizes[2] / 1024),
+        total: Math.round(totalBytes / 1024),
+      });
+
       const formData = new FormData();
-      
+
       formData.append('government_id', {
         uri: govId.uri,
         name: govId.name,
@@ -280,7 +323,7 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
-          'Authorization': jwtToken ? `Bearer ${jwtToken}` : '',
+          'Authorization': `Bearer ${jwtToken}`,
         },
         credentials: 'include',
         body: formData,
@@ -290,19 +333,51 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.log('Step 3 API Failed:', response.status, errorData);
+        if (response.status === 401) {
+          Toast.show({
+            type: 'error',
+            text1: 'Session expired',
+            text2:
+              errorData.code === 'TOKEN_EXPIRED'
+                ? 'Your registration session expired. Please verify your number again.'
+                : 'Please verify your number again.',
+          });
+          navigation.navigate('Login');
+          return;
+        }
+        if (response.status === 413) {
+          throw new Error('Your photos are too large to upload. Please retake them and try again.');
+        }
         throw new Error(errorData.message || `Failed to submit Step 3 (Status: ${response.status})`);
       }
 
       const data = await response.json().catch(() => ({}));
       console.log('Step 3 API Success:', data);
 
+      // Step 3 now returns a real session token + user. Persist them so the app
+      // stays signed in; fall back to /auth/refresh once if either is missing.
+      let { token: sessionToken, user: sessionUser } = readAuthPayload(data);
+      if (!sessionToken) {
+        try {
+          const refreshed = readAuthPayload(await refreshSession(jwtToken));
+          sessionToken = refreshed.token;
+          sessionUser = refreshed.user;
+        } catch (refreshErr) {
+          console.log('Step 3 post-submit refresh failed:', (refreshErr as Error)?.message);
+        }
+      }
+
       Toast.show({
         type: 'success',
         text1: 'Registration Complete',
         text2: 'Your application is under review.',
       });
-      
-      navigation.navigate('Login');
+
+      if (sessionToken) {
+        await login(sessionToken, sessionUser);
+      } else {
+        navigation.navigate('Login');
+      }
     } catch (error: any) {
       console.log('Step 3 API Error:', error?.name, error?.message);
       Toast.show({

@@ -107,25 +107,43 @@ export const CreateSlotScreen = () => {
         const uriParts = image.split('.');
         const fileType = uriParts[uriParts.length - 1];
         
-        formData.append('meal_image', {
+        const imageMetadata = {
           uri: image,
           name: `meal_${Date.now()}.${fileType}`,
           type: `image/${fileType}`,
-        } as any);
+        };
+        console.log('CreateMeal: Image attached:', JSON.stringify(imageMetadata));
+        formData.append('meal_image', imageMetadata as any);
       }
 
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}meals`, {
+      console.log('CreateMeal: Form Data Fields:');
+      console.log('- meal_name:', dishTitle);
+      console.log('- type:', dietaryType === 'Veg' ? 'VEG' : 'NON_VEG');
+      console.log('- service_window:', finalSlot);
+      console.log('- price:', parsedPrice);
+      console.log('- slots_total:', capacity);
+      console.log('- date:', timestamp);
+
+      const apiUrl = `${process.env.EXPO_PUBLIC_API_URL}meals`;
+      console.log('CreateMeal: Request URL:', apiUrl);
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          // Note: fetch will automatically set multipart/form-data with boundary for FormData
+          'Accept': 'application/json',
         },
         body: formData,
       });
 
-      const result = await response.json();
-      
-      if (response.ok && result.status === 'success') {
+      console.log('CreateMeal: Response status:', response.status);
+      const result = await response.json().catch(err => {
+        console.error('CreateMeal: Failed to parse JSON response:', err);
+        return null;
+      });
+      console.log('CreateMeal: Response result:', JSON.stringify(result, null, 2));
+
+      if (response.ok && (result?.status === 'success' || result?.id)) {
         setModalConfig({
           visible: true,
           type: 'success',
@@ -137,7 +155,7 @@ export const CreateSlotScreen = () => {
           },
         });
       } else {
-        throw new Error(result.message || 'Failed to create meal slot');
+        throw new Error(result?.message || 'Failed to create meal slot');
       }
     } catch (error: any) {
       setModalConfig({
@@ -167,7 +185,9 @@ export const CreateSlotScreen = () => {
 
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 1,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.3,
     });
 
     if (!result.canceled) {
@@ -189,7 +209,9 @@ export const CreateSlotScreen = () => {
     }
 
     let result = await ImagePicker.launchCameraAsync({
-      quality: 1,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.3,
     });
 
     if (!result.canceled) {

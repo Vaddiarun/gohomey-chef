@@ -61,28 +61,32 @@ export const SocialEventsScreen = ({ navigation }: any) => {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <View>
-        <Text style={Typography.h1}>Social Events & Parties</Text>
-        <Text style={Typography.caption}>Host in-house parties or custom socials. Neighbors can book tickets to attend.</Text>
+      <View style={styles.headerTopRow}>
+        <Text style={[Typography.h1, styles.headerTitle]} numberOfLines={2}>
+          Social Events & Parties
+        </Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.filterButton, { marginRight: Spacing.sm, backgroundColor: Colors.primary + '20', borderColor: Colors.primary }]}
+            onPress={handleCreateEvent}
+          >
+            <Plus size={20} color={Colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter !== 'all' && styles.activeFilterButton,
+            ]}
+            onPress={() => setFilterVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Filter size={20} color={activeFilter !== 'all' ? Colors.primary : Colors.text} />
+          </TouchableOpacity>
+        </View>
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <TouchableOpacity 
-          style={[styles.filterButton, { marginRight: Spacing.sm, backgroundColor: Colors.primary + '20', borderColor: Colors.primary }]}
-          onPress={handleCreateEvent}
-        >
-          <Plus size={20} color={Colors.primary} />
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[
-            styles.filterButton,
-            activeFilter !== 'all' && styles.activeFilterButton,
-          ]}
-          onPress={() => setFilterVisible(true)}
-          activeOpacity={0.7}
-        >
-          <Filter size={20} color={activeFilter !== 'all' ? Colors.primary : Colors.text} />
-        </TouchableOpacity>
-      </View>
+      <Text style={[Typography.caption, styles.headerCaption]}>
+        Host in-house parties or custom socials. Neighbors can book tickets to attend.
+      </Text>
     </View>
   );
 
@@ -179,11 +183,26 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
+  },
+  headerTitle: {
+    flex: 1,
+    paddingRight: Spacing.md,
+  },
+  headerCaption: {
+    marginTop: 4,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
   },
   filterButton: {
     width: 40,
