@@ -9,14 +9,13 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  FlatList,
   Keyboard,
 } from 'react-native';
 import { MapPin, Search, X, Navigation } from 'lucide-react-native';
-import { Colors, Spacing, Typography } from '../theme';
+import { C, F } from '../theme';
+import { PressableScale } from './ui/PressableScale';
 import * as Location from 'expo-location';
 
 const GOOGLE_MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
@@ -40,6 +39,8 @@ interface Props {
   }) => void;
   placeholder?: string;
   showCurrentLocation?: boolean;
+  /** 'light' (default) = Figma field style; 'dark' kept only for API compatibility — renders the same light palette. */
+  variant?: 'dark' | 'light';
 }
 
 export const LocationSearchInput = ({
@@ -48,7 +49,12 @@ export const LocationSearchInput = ({
   onLocationSelected,
   placeholder = 'Search for a place...',
   showCurrentLocation = true,
+  variant = 'light',
 }: Props) => {
+  const light = variant === 'light';
+  const sx = (key: keyof typeof styles) => [styles[key], light && (lightStyles as any)[key]];
+  const accent = light ? C.primary : C.primary;
+  const muted = light ? C.iconMuted : C.iconMuted;
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -198,73 +204,73 @@ export const LocationSearchInput = ({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={sx('container')}>
       {/* Search Input */}
-      <View style={styles.inputRow}>
-        <Search size={16} color={Colors.textSecondary} style={styles.searchIcon} />
+      <View style={sx('inputRow')}>
+        {light ? (
+          <MapPin size={16} color={C.iconMuted} style={sx('searchIcon')} />
+        ) : (
+          <Search size={16} color={C.iconMuted} style={sx('searchIcon')} />
+        )}
         <TextInput
-          style={styles.input}
+          style={sx('input')}
           value={value}
           onChangeText={handleTextChange}
           placeholder={placeholder}
-          placeholderTextColor={Colors.textSecondary}
+          placeholderTextColor={muted}
           returnKeyType="search"
           onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
         />
-        {loading && <ActivityIndicator size="small" color={Colors.primary} style={styles.loader} />}
+        {loading && <ActivityIndicator size="small" color={accent} style={sx('loader')} />}
         {value.length > 0 && !loading && (
-          <TouchableOpacity onPress={clearInput} style={styles.clearBtn}>
-            <X size={16} color={Colors.textSecondary} />
-          </TouchableOpacity>
+          <PressableScale onPress={clearInput} style={sx('clearBtn')}>
+            <X size={16} color={muted} />
+          </PressableScale>
         )}
       </View>
 
       {/* Current Location Button */}
       {showCurrentLocation && (
-        <TouchableOpacity
-          style={styles.currentLocBtn}
+        <PressableScale
+          style={sx('currentLocBtn')}
           onPress={handleCurrentLocation}
           disabled={detectingLocation}
         >
           {detectingLocation ? (
-            <ActivityIndicator size="small" color={Colors.primary} />
+            <ActivityIndicator size="small" color={accent} />
           ) : (
-            <Navigation size={14} color={Colors.primary} />
+            <Navigation size={14} color={accent} />
           )}
-          <Text style={styles.currentLocText}>Use My Current Location</Text>
-        </TouchableOpacity>
+          <Text style={sx('currentLocText')}>Use My Current Location</Text>
+        </PressableScale>
       )}
 
       {/* Suggestions Dropdown */}
       {showSuggestions && (
-        <View style={styles.suggestionsOverlay}>
-          <View style={styles.suggestionsContainer}>
-            <FlatList
-              data={suggestions}
-              keyExtractor={(item) => item.place_id}
-              keyboardShouldPersistTaps="handled"
-              scrollEnabled={true}
-              nestedScrollEnabled={true}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.suggestionItem}
-                  onPress={() => handleSelectSuggestion(item)}
-                  activeOpacity={0.7}
-                >
-                  <MapPin size={14} color={Colors.primary} style={styles.suggestionIcon} />
-                  <View style={styles.suggestionTextWrap}>
-                    <Text style={styles.suggestionMain} numberOfLines={1}>
-                      {item.structured_formatting.main_text}
+        <View style={sx('suggestionsOverlay')}>
+          <View style={sx('suggestionsContainer')}>
+            {/* Plain map (≤5 Google predictions) — a FlatList here nests inside the
+                screen's ScrollView and triggers the VirtualizedList warning. */}
+            {suggestions.map((item) => (
+              <PressableScale
+                key={item.place_id}
+                style={sx('suggestionItem')}
+                onPress={() => handleSelectSuggestion(item)}
+                pressedScale={0.98}
+              >
+                <MapPin size={14} color={accent} style={sx('suggestionIcon')} />
+                <View style={sx('suggestionTextWrap')}>
+                  <Text style={sx('suggestionMain')} numberOfLines={1}>
+                    {item.structured_formatting.main_text}
+                  </Text>
+                  {!!item.structured_formatting.secondary_text && (
+                    <Text style={sx('suggestionSub')} numberOfLines={1}>
+                      {item.structured_formatting.secondary_text}
                     </Text>
-                    {!!item.structured_formatting.secondary_text && (
-                      <Text style={styles.suggestionSub} numberOfLines={1}>
-                        {item.structured_formatting.secondary_text}
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              )}
-            />
+                  )}
+                </View>
+              </PressableScale>
+            ))}
           </View>
         </View>
       )}
@@ -289,10 +295,10 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     paddingHorizontal: 12,
     height: 48,
   },
@@ -301,8 +307,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    ...Typography.body,
-    color: Colors.text,
+    color: C.textStrong,
     fontSize: 14,
   },
   loader: {
@@ -321,21 +326,21 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: C.primary,
   },
   currentLocText: {
-    color: Colors.primary,
+    color: C.primary,
     fontSize: 12,
     fontWeight: 'bold',
   },
   suggestionsContainer: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     maxHeight: 250,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -350,7 +355,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: C.border,
   },
   suggestionIcon: {
     marginRight: 10,
@@ -360,14 +365,66 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   suggestionMain: {
-    ...Typography.body,
-    color: Colors.text,
+    color: C.textStrong,
     fontSize: 13,
     fontWeight: '600',
   },
   suggestionSub: {
-    color: Colors.textSecondary,
+    color: C.iconMuted,
     fontSize: 11,
     marginTop: 2,
+  },
+});
+
+const lightStyles = StyleSheet.create({
+  inputRow: {
+    backgroundColor: C.surface,
+    borderRadius: 15,
+    borderColor: C.border,
+    paddingHorizontal: 16,
+    height: 52,
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  input: {
+    fontFamily: F.jakartaSemiBold,
+    fontSize: 13,
+    color: C.textStrong,
+  },
+  currentLocBtn: {
+    backgroundColor: C.softOrange,
+    borderColor: C.softOrange,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+  },
+  currentLocText: {
+    fontFamily: F.jakartaSemiBold,
+    fontWeight: 'normal',
+    color: C.primary,
+  },
+  // Inline (not floating) so every row stays inside its parent and receives
+  // taps on Android when the field sits inside a ScrollView.
+  suggestionsOverlay: {
+    position: 'relative',
+    top: 0,
+    marginTop: 4,
+  },
+  suggestionsContainer: {
+    backgroundColor: C.surface,
+    borderRadius: 15,
+    borderColor: C.border,
+  },
+  suggestionItem: {
+    borderBottomColor: C.border,
+  },
+  suggestionMain: {
+    fontFamily: F.jakartaSemiBold,
+    fontWeight: 'normal',
+    color: C.textStrong,
+  },
+  suggestionSub: {
+    fontFamily: F.jakartaRegular,
+    color: C.textMuted,
   },
 });

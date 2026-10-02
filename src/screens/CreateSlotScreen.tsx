@@ -1,760 +1,295 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   TextInput,
-  Image,
-  KeyboardAvoidingView,
-  Platform
 } from 'react-native';
-import { Colors, Spacing, Typography } from '../theme';
-import { ChefTip } from '../components/ChefTip';
-import { StatusModal } from '../components/StatusModal';
-import { Camera, Plus, Minus, Image as ImageIcon, Calendar } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
-import { normalizeSlot, SlotType } from '../utils/dateTime';
-
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
+import * as ImagePicker from 'expo-image-picker';
+import { Camera, Image as ImageIcon, IndianRupee } from 'lucide-react-native';
+import Toast from 'react-native-toast-message';
+import { C, F } from '../theme';
+import { ActionSheet, Chip, FadeInView, FormField, KitchenHeader, PrimaryButton, UploadTile } from '../components/ui';
+import type { PickedFile } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import { ActivityIndicator } from 'react-native';
 import { getRequiredPrice, isPriceAboveLimit, MAX_PRICE } from '../utils/price';
+import { compressImage } from '../utils/compressImage';
+import { friendlyApiError } from '../utils/apiErrors';
+import { isWindowClosed, MEAL_WINDOWS, MealWindow, platformFee } from '../utils/meals';
+import { AvailabilityRow, FeeBreakdown } from '../components/MealFormParts';
+import { KeyboardAware } from '../components/ui/KeyboardAware';
 
 export const CreateSlotScreen = () => {
-  const navigation = useNavigation();
-  const { token } = useAuth();
-  
+  const navigation = useNavigation<any>();
+  const { token, user } = useAuth();
+  const insets = useSafeAreaInsets();
+
   const [dishTitle, setDishTitle] = useState('');
   const [dietaryType, setDietaryType] = useState<'Veg' | 'Non-Veg'>('Veg');
-  
-  // Slot Logic States
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null); // null means AUTO
-  const [customSlot, setCustomSlot] = useState('');
-  const [showCustomInput, setShowCustomInput] = useState(false);
-  
   const [price, setPrice] = useState('');
-  const [capacity, setCapacity] = useState(10);
-  const [image, setImage] = useState<string | null>(null);
+  const [capacity, setCapacity] = useState('10');
+  const [image, setImage] = useState<PickedFile | null>(null);
+  const [windows, setWindows] = useState<MealWindow[]>([]);
+  const [tomorrow, setTomorrow] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
   const parsedPrice = getRequiredPrice(price);
   const priceAboveLimit = isPriceAboveLimit(price);
+  const fee = platformFee(user);
 
-  // Date Selection
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const serviceDate = (() => {
+    const d = new Date();
+    if (tomorrow) d.setDate(d.getDate() + 1);
+    return d;
+  })();
 
-  // Modal State
-  const [modalConfig, setModalConfig] = useState<{
-    visible: boolean;
-    type: 'success' | 'error';
-    title: string;
-    message: string;
-    onClose: () => void;
-  }>({
-    visible: false,
-    type: 'success',
-    title: '',
-    message: '',
-    onClose: () => {},
-  });
+  const toggleWindow = (id: MealWindow, on: boolean) =>
+    setWindows((prev) => (on ? [...prev.filter((w) => w !== id), id] : prev.filter((w) => w !== id)));
 
-  // Derived slot value
-  const currentSlot = selectedSlot;
+  const onTomorrow = (on: boolean) => {
+    setTomorrow(on);
+    // Windows already closed for today become available again tomorrow, and vice versa.
+    if (!on) {
+      const today = new Date();
+      setWindows((prev) => prev.filter((w) => !isWindowClosed(MEAL_WINDOWS.find((x) => x.id === w)!, today)));
+    }
+  };
+
+  const pick = async (useCamera: boolean) => {
+    const perm = useCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm.status !== 'granted') {
+      Toast.show({
+        type: 'error',
+        text1: 'Permission Denied',
+        text2: useCamera ? 'Camera access is needed to photograph your dish.' : 'Photo access is needed to upload your dish.',
+      });
+      return;
+    }
+    const opts = { allowsEditing: true, aspect: [4, 3] as [number, number], quality: 0.7 };
+    const result = useCamera
+      ? await ImagePicker.launchCameraAsync(opts)
+      : await ImagePicker.launchImageLibraryAsync({ ...opts, mediaTypes: ['images'] });
+    if (!result.canceled && result.assets?.length) {
+      const asset = result.assets[0];
+      setImage(await compressImage(asset.uri, asset.width));
+    }
+  };
 
   const handleSubmit = async () => {
-    if (!dishTitle || parsedPrice === null) {
-      setModalConfig({
-        visible: true,
+    if (!dishTitle.trim() || parsedPrice === null) {
+      Toast.show({
         type: 'error',
-        title: 'Missing Details',
-        message: 'Please fill in dish title and a valid price before creating the slot.',
-        onClose: () => setModalConfig(prev => ({ ...prev, visible: false })),
+        text1: 'Missing Details',
+        text2: priceAboveLimit ? `Price can't be more than ₹${MAX_PRICE}.` : 'Please add a dish name and a valid price.',
       });
+      return;
+    }
+    const slots = parseInt(capacity, 10);
+    if (!slots || slots < 1) {
+      Toast.show({ type: 'error', text1: 'Number of slots', text2: 'Enter at least 1 slot.' });
+      return;
+    }
+    if (windows.length === 0) {
+      Toast.show({ type: 'error', text1: 'Availability', text2: 'Turn on at least one meal window.' });
       return;
     }
 
     setLoading(true);
+    const failed: string[] = [];
     try {
-      const timestamp = selectedDate.toISOString();
-      const finalSlot = selectedSlot === 'CUSTOM' ? normalizeSlot(customSlot) : currentSlot;
-      
-      if (!finalSlot) {
-        setModalConfig({
-          visible: true,
-          type: 'error',
-          title: 'Invalid Slot',
-          message: 'Meal slot choice cannot be empty. Please select one or enter a custom name.',
-          onClose: () => setModalConfig(prev => ({ ...prev, visible: false })),
+      // One meal per enabled window — the API takes a single service_window.
+      for (const w of MEAL_WINDOWS.filter((x) => windows.includes(x.id))) {
+        const formData = new FormData();
+        formData.append('meal_name', dishTitle.trim());
+        formData.append('type', dietaryType === 'Veg' ? 'VEG' : 'NON_VEG');
+        formData.append('service_window', w.id);
+        formData.append('price', String(parsedPrice));
+        formData.append('slots_total', String(slots));
+        formData.append('date', serviceDate.toISOString());
+        if (image) {
+          formData.append('meal_image', { uri: image.uri, name: image.name, type: image.type } as any);
+        }
+
+        const apiUrl = `${process.env.EXPO_PUBLIC_API_URL}meals`;
+        console.log('CreateMeal: POST', apiUrl, { window: w.id, price: parsedPrice, slots });
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+          body: formData,
         });
+        const result = await response.json().catch(() => null);
+        console.log('CreateMeal: Response', response.status, JSON.stringify(result, null, 2));
+        if (!(response.ok && (result?.status === 'success' || result?.id))) {
+          failed.push(w.label);
+          const friendly = friendlyApiError(response.status, result, 'Could not publish this meal.');
+          console.log('CreateMeal failed for', w.id, friendly.message);
+        }
+      }
+
+      if (failed.length === windows.length) {
+        Toast.show({ type: 'error', text1: 'Publishing failed', text2: 'Please check your connection and try again.' });
         return;
       }
-
-      const formData = new FormData();
-      formData.append('meal_name', dishTitle);
-      formData.append('type', dietaryType === 'Veg' ? 'VEG' : 'NON_VEG');
-      formData.append('service_window', finalSlot); // Changed from 'slot' to 'service_window'
-      formData.append('price', String(parsedPrice));
-      formData.append('slots_total', capacity.toString());
-      formData.append('date', timestamp); // Changed from YYYY-MM-DD to full timestamp as per API docs
-      // Note: isAutoAssigned and createdBy are kept only if supported by backend, 
-      // but based on Prisma error, they might need to be removed if the next error occurs.
-      // For now, removing them to match the provided API screenshot exactly.
-      // formData.append('isAutoAssigned', isAutoAssigned.toString());
-      // formData.append('createdBy', isAutoAssigned ? 'SYSTEM' : 'CHEF');
-
-      if (image) {
-        const uriParts = image.split('.');
-        const fileType = uriParts[uriParts.length - 1];
-        
-        const imageMetadata = {
-          uri: image,
-          name: `meal_${Date.now()}.${fileType}`,
-          type: `image/${fileType}`,
-        };
-        console.log('CreateMeal: Image attached:', JSON.stringify(imageMetadata));
-        formData.append('meal_image', imageMetadata as any);
+      if (failed.length > 0) {
+        Toast.show({ type: 'info', text1: 'Partly published', text2: `Could not publish: ${failed.join(', ')}.` });
       }
-
-      console.log('CreateMeal: Form Data Fields:');
-      console.log('- meal_name:', dishTitle);
-      console.log('- type:', dietaryType === 'Veg' ? 'VEG' : 'NON_VEG');
-      console.log('- service_window:', finalSlot);
-      console.log('- price:', parsedPrice);
-      console.log('- slots_total:', capacity);
-      console.log('- date:', timestamp);
-
-      const apiUrl = `${process.env.EXPO_PUBLIC_API_URL}meals`;
-      console.log('CreateMeal: Request URL:', apiUrl);
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-        body: formData,
-      });
-
-      console.log('CreateMeal: Response status:', response.status);
-      const result = await response.json().catch(err => {
-        console.error('CreateMeal: Failed to parse JSON response:', err);
-        return null;
-      });
-      console.log('CreateMeal: Response result:', JSON.stringify(result, null, 2));
-
-      if (response.ok && (result?.status === 'success' || result?.id)) {
-        setModalConfig({
-          visible: true,
-          type: 'success',
-          title: 'Crafted Successfully!',
-          message: 'Your masterpiece is now available for diners to enjoy.',
-          onClose: () => {
-            setModalConfig(prev => ({ ...prev, visible: false }));
-            navigation.goBack();
-          },
-        });
-      } else {
-        throw new Error(result?.message || 'Failed to create meal slot');
-      }
-    } catch (error: any) {
-      setModalConfig({
-        visible: true,
-        type: 'error',
-        title: 'Crafting Failed',
-        message: error.message || 'Something went wrong while preparing your slot.',
-        onClose: () => setModalConfig(prev => ({ ...prev, visible: false })),
-      });
+      navigation.replace('Success', { kind: 'daily' });
+    } catch {
+      Toast.show({ type: 'error', text1: 'Network error', text2: 'Please check your connection and try again.' });
     } finally {
       setLoading(false);
     }
   };
 
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      setModalConfig({
-        visible: true,
-        type: 'error',
-        title: 'Permission Denied',
-        message: 'We need camera roll permissions to upload images of your dishes.',
-        onClose: () => setModalConfig(prev => ({ ...prev, visible: false })),
-      });
-      return;
-    }
-
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.3,
-    });
-
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
-    }
-  };
-
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      setModalConfig({
-        visible: true,
-        type: 'error',
-        title: 'Permission Denied',
-        message: 'We need camera permissions to capture your dish masterpieces.',
-        onClose: () => setModalConfig(prev => ({ ...prev, visible: false })),
-      });
-      return;
-    }
-
-    let result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.3,
-    });
-
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
-    }
-  };
-
-  const getDisabledSlots = (date: Date) => {
-    const now = new Date();
-    // Only check times if the selected date is today
-    if (date.toDateString() !== now.toDateString()) {
-      return [];
-    }
-    
-    const currentHour = now.getHours();
-    const disabled = [];
-    
-    if (currentHour >= 5) disabled.push('BREAKFAST');
-    if (currentHour >= 11) disabled.push('LUNCH');
-    if (currentHour >= 17) disabled.push('DINNER');
-    
-    return disabled;
-  };
-
-  const renderDateOptions = () => {
-    const today = new Date();
-    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-    const dayAfter = new Date(today); dayAfter.setDate(dayAfter.getDate() + 2);
-    
-    const dates = [
-      { label: 'Today', date: today },
-      { label: 'Tomorrow', date: tomorrow },
-      { label: dayAfter.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), date: dayAfter }
-    ];
-
-    return (
-      <View style={styles.inputSection}>
-        <Text style={styles.label}>SERVICE DATE (UP TO 3 DAYS)</Text>
-        <View style={styles.slotContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.slotScroll}>
-            {dates.map((d, idx) => {
-              const isSelected = selectedDate.toDateString() === d.date.toDateString();
-              return (
-                <TouchableOpacity 
-                  key={idx}
-                  style={[styles.slotChip, isSelected && styles.activeSlotChip]}
-                  onPress={() => {
-                    setSelectedDate(d.date);
-                    // Reset selected slot if it becomes disabled on the new date
-                    const newlyDisabled = getDisabledSlots(d.date);
-                    if (selectedSlot && newlyDisabled.includes(selectedSlot)) {
-                      setSelectedSlot(null);
-                    }
-                  }}
-                >
-                  <Calendar size={14} color={isSelected ? Colors.background : Colors.textSecondary} style={{ marginRight: 6 }} />
-                  <Text style={[styles.slotChipText, isSelected && styles.activeSlotChipText]}>
-                    {d.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      </View>
-    );
-  };
-
-  const renderSlotOptions = () => {
-    const predefinedSlots = ['BREAKFAST', 'LUNCH', 'DINNER'];
-    const disabledSlots = getDisabledSlots(selectedDate);
-    
-    return (
-      <View style={styles.inputSection}>
-        <Text style={styles.label}>MEAL SLOT</Text>
-        <View style={styles.slotContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.slotScroll}>
-            {predefinedSlots.map((s) => {
-              const isDisabled = disabledSlots.includes(s);
-              return (
-                <TouchableOpacity 
-                  key={s}
-                  style={[
-                    styles.slotChip, 
-                    selectedSlot === s && styles.activeSlotChip,
-                    isDisabled && { opacity: 0.5, backgroundColor: Colors.surface, borderColor: Colors.border }
-                  ]}
-                  disabled={isDisabled}
-                  onPress={() => {
-                    setSelectedSlot(s);
-                    setShowCustomInput(false);
-                  }}
-                >
-                  <Text style={[
-                    styles.slotChipText, 
-                    selectedSlot === s && styles.activeSlotChipText,
-                    isDisabled && { color: Colors.textSecondary, textDecorationLine: 'line-through' }
-                  ]}>{s}</Text>
-                </TouchableOpacity>
-              );
-            })}
-
-            <TouchableOpacity 
-              style={[styles.slotChip, selectedSlot === 'CUSTOM' && styles.activeSlotChip]}
-              onPress={() => {
-                setSelectedSlot('CUSTOM');
-                setShowCustomInput(true);
-              }}
-            >
-              <Text style={[styles.slotChipText, selectedSlot === 'CUSTOM' && styles.activeSlotChipText]}>+ Custom</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-
-        {showCustomInput && (
-          <TextInput 
-            style={[styles.input, { marginTop: 12 }]}
-            placeholder="Enter custom slot (e.g. SNACKS)"
-            placeholderTextColor={Colors.textSecondary}
-            value={customSlot}
-            onChangeText={setCustomSlot}
-            autoCapitalize="characters"
-          />
-        )}
-      </View>
-    );
-  };
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <StatusModal 
-          visible={modalConfig.visible}
-          type={modalConfig.type}
-          title={modalConfig.title}
-          message={modalConfig.message}
-          onClose={modalConfig.onClose}
+    <View style={styles.root}>
+      <StatusBar style="dark" />
+      <View style={{ paddingTop: insets.top }}>
+        <KitchenHeader
+          kitchenName="Add New Meal"
+          subtitle="GoHomeyy Chef"
+          ownerName={user?.name}
+          onBack={() => navigation.goBack()}
+          onWallet={() => navigation.navigate('Wallet')}
+          onProfile={() => navigation.navigate('Profile')}
         />
-        {/* Greeting Section */}
-        <View style={styles.greetingSection}>
-          <Text style={styles.greetingTitle}>Good Morning, Chef</Text>
-          <Text style={styles.greetingSubtitle}>Let's prepare your kitchen for today's masterpieces. Define your availability and craft your menu.</Text>
-        </View>
+      </View>
 
-        {/* Image Upload Option Expansion */}
-        <View style={styles.imageOptionsRow}>
-          <TouchableOpacity style={[styles.imageUploadHalf, image ? styles.imageUploadWithPreview : null]} onPress={takePhoto}>
-            {image ? (
-               <Image source={{ uri: image }} style={styles.previewImage} />
-            ) : (
-              <View style={styles.uploadPlaceholderCompact}>
-                <Camera size={20} color={Colors.primary} />
-                <Text style={styles.uploadTitleCompact}>Take Photo</Text>
-              </View>
-            )}
-            {image && (
-              <TouchableOpacity style={styles.changeImageBtn} onPress={() => setImage(null)}>
-                 <Text style={styles.changeImageText}>Remove</Text>
-              </TouchableOpacity>
-            )}
-          </TouchableOpacity>
+      <KeyboardAware style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <FadeInView>
+            <UploadTile tone="cream" file={image} onPress={() => setSheetOpen(true)} />
+          </FadeInView>
 
-          <TouchableOpacity style={[styles.imageUploadHalf, !image ? null : { display: 'none' }]} onPress={pickImage}>
-            <View style={styles.uploadPlaceholderCompact}>
-              <ImageIcon size={20} color={Colors.primary} />
-              <Text style={styles.uploadTitleCompact}>Gallery</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+          <FadeInView delay={60}>
+            <FormField label="Name" value={dishTitle} onChangeText={setDishTitle} placeholder="e.g. Chicken Curry" autoCapitalize="words" />
+          </FadeInView>
 
-        {!image && (
-           <Text style={styles.imageHint}>High-res JPEG or PNG preferred (Max 5MB)</Text>
-        )}
+          <FadeInView delay={100} style={styles.typeRow}>
+            {(['Veg', 'Non-Veg'] as const).map((t) => (
+              <Chip key={t} label={t} selected={dietaryType === t} onPress={() => setDietaryType(t)} />
+            ))}
+          </FadeInView>
 
-        {/* Dish Identity */}
-        <View style={styles.inputSection}>
-          <Text style={styles.label}>DISH IDENTITY</Text>
-          <TextInput 
-            style={styles.input}
-            placeholder="e.g. Truffle Mushroom Risotto"
-            placeholderTextColor={Colors.textSecondary}
-            value={dishTitle}
-            onChangeText={setDishTitle}
-          />
-        </View>
-
-        {/* Dietary Type */}
-        <View style={styles.inputSection}>
-          <Text style={styles.label}>DIETARY TYPE</Text>
-          <View style={styles.toggleRow}>
-            <TouchableOpacity 
-              style={[styles.toggleBtn, dietaryType === 'Veg' && styles.activeToggle]}
-              onPress={() => setDietaryType('Veg')}
-            >
-              <View style={[styles.dot, { backgroundColor: '#22C55E' }]} />
-              <Text style={[styles.toggleBtnText, dietaryType === 'Veg' && styles.activeToggleText]}>Veg</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.toggleBtn, dietaryType === 'Non-Veg' && styles.activeToggle]}
-              onPress={() => setDietaryType('Non-Veg')}
-            >
-              <View style={[styles.dot, { backgroundColor: '#EF4444' }]} />
-              <Text style={[styles.toggleBtnText, dietaryType === 'Non-Veg' && styles.activeToggleText]}>Non-Veg</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Date Selection */}
-        {renderDateOptions()}
-
-        {/* Meal Slot Selection */}
-        {renderSlotOptions()}
-
-        {/* Price per Meal */}
-        <View style={styles.inputSection}>
-          <Text style={styles.label}>PRICE PER MEAL</Text>
-          <View style={styles.priceInputContainer}>
-            <Text style={styles.currency}>₹</Text>
-            <TextInput 
-              style={styles.priceInput}
-              keyboardType="numeric"
-              placeholder="0.00"
-              placeholderTextColor={Colors.textSecondary}
+          <FadeInView delay={140}>
+            <FormField
+              label="Base price"
               value={price}
-              onChangeText={setPrice}
+              onChangeText={(v) => setPrice(v.replace(/[^\d.]/g, ''))}
+              placeholder="220"
+              keyboardType="numeric"
+              icon={<IndianRupee size={16} color={C.iconMuted} strokeWidth={1.33} />}
             />
-          </View>
-          {priceAboveLimit ? (
-            <Text style={styles.errorHint}>Price cannot exceed ₹{MAX_PRICE.toLocaleString('en-IN')}.</Text>
-          ) : null}
-          <Text style={styles.hint}>ⓘ Recommended: ₹220-₹250</Text>
+            {priceAboveLimit && <Text style={styles.error}>Price can't be more than ₹{MAX_PRICE}.</Text>}
+          </FadeInView>
+
+          <FadeInView delay={180}>
+            <FeeBreakdown price={parsedPrice ?? 0} fee={fee} />
+          </FadeInView>
+
+          <FadeInView delay={220}>
+            <FormField
+              label="Enter Number of slots"
+              value={capacity}
+              onChangeText={(v) => setCapacity(v.replace(/\D/g, ''))}
+              keyboardType="number-pad"
+              placeholder="10"
+            />
+          </FadeInView>
+
+          <FadeInView delay={260} style={styles.availability}>
+            <Text style={styles.sectionLabel}>Availability</Text>
+            {MEAL_WINDOWS.map((w) => {
+              const closed = isWindowClosed(w, serviceDate);
+              return (
+                <AvailabilityRow
+                  key={w.id}
+                  title={w.label}
+                  subtitle={closed ? `${w.time} · Closed for today` : `${w.time} · ${parseInt(capacity, 10) || 0} slots`}
+                  value={windows.includes(w.id) && !closed}
+                  onChange={(on) => toggleWindow(w.id, on)}
+                  disabled={closed}
+                />
+              );
+            })}
+            <AvailabilityRow
+              icon="calendar"
+              title="Tomorrow"
+              subtitle={`${tomorrow ? 'Serving on' : 'Serve on'} ${tomorrowDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}`}
+              value={tomorrow}
+              onChange={onTomorrow}
+            />
+          </FadeInView>
+        </ScrollView>
+
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+          <PrimaryButton label="Publish" onPress={handleSubmit} loading={loading} />
         </View>
+      </KeyboardAware>
 
-        {/* Kitchen Capacity */}
-        <View style={styles.inputSection}>
-          <Text style={styles.label}>KITCHEN CAPACITY</Text>
-          <View style={styles.stepper}>
-            <TouchableOpacity 
-              style={styles.stepperBtn}
-              onPress={() => setCapacity(Math.max(1, capacity - 1))}
-            >
-              <Minus size={20} color={Colors.primary} />
-            </TouchableOpacity>
-            <Text style={styles.capacityText}>{capacity} Meals</Text>
-            <TouchableOpacity 
-              style={styles.stepperBtn}
-              onPress={() => setCapacity(capacity + 1)}
-            >
-              <Plus size={20} color={Colors.primary} />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.hint}>Total portions you can serve</Text>
-        </View>
-
-        <ChefTip tip="Dishes with high-quality imagery and realistic meal capacities tend to see 40% higher engagement from diners." />
-
-        <TouchableOpacity 
-          style={[styles.submitBtn, (loading || parsedPrice === null) && styles.submitBtnDisabled]}
-          onPress={handleSubmit}
-          disabled={loading || parsedPrice === null}
-        >
-          {loading ? (
-            <ActivityIndicator color={Colors.background} size="small" />
-          ) : (
-            <Text style={styles.submitBtnText}>Create Meal Slot</Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      <ActionSheet
+        visible={sheetOpen}
+        title="Meal photo"
+        subtitle="Add a bright, appetising photo of the dish"
+        options={[
+          { label: 'Take Photo', description: 'Use your camera', icon: Camera, onPress: () => pick(true) },
+          { label: 'Choose from Gallery', description: 'JPG or PNG from your phone', icon: ImageIcon, onPress: () => pick(false) },
+        ]}
+        onClose={() => setSheetOpen(false)}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: C.bg,
   },
-  scrollContent: {
-    padding: Spacing.md,
-    paddingBottom: 40,
-    backgroundColor: Colors.background,
-  },
-  scrollView: {
-    backgroundColor: Colors.background,
-  },
-  greetingSection: {
-    marginBottom: Spacing.xl,
-    paddingTop: Spacing.sm,
-  },
-  greetingTitle: {
-    ...Typography.h1,
-    fontSize: 28,
-    marginBottom: 8,
-  },
-  greetingSubtitle: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    lineHeight: 20,
-  },
-  imageUpload: {
-    height: 180,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-    marginBottom: Spacing.lg,
-    overflow: 'hidden',
-  },
-  uploadPlaceholder: {
+  flex: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.md,
   },
-  cameraIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.sm,
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 15,
+    paddingBottom: 32,
+    gap: 16,
   },
-  uploadTitle: {
-    ...Typography.h3,
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  uploadSubtitle: {
-    ...Typography.caption,
-    textAlign: 'center',
-  },
-  previewImage: {
-    width: '100%',
-    height: '100%',
-  },
-  inputSection: {
-    marginBottom: Spacing.lg,
-  },
-  label: {
-    ...Typography.caption,
-    fontSize: 10,
-    color: Colors.textSecondary,
-    fontWeight: 'bold',
-    marginBottom: Spacing.sm,
-  },
-  imageOptionsRow: {
+  typeRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: Spacing.sm,
-  },
-  imageUploadHalf: {
-    flex: 1,
-    height: 120,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-    overflow: 'hidden',
-  },
-  imageUploadWithPreview: {
-    borderStyle: 'solid',
-    height: 120,
-  },
-  uploadPlaceholderCompact: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
+    marginTop: -6,
   },
-  uploadTitleCompact: {
-    ...Typography.caption,
-    fontWeight: 'bold',
-    color: Colors.primary,
-  },
-  imageHint: {
-    ...Typography.caption,
-    textAlign: 'center',
-    marginBottom: Spacing.lg,
-    color: Colors.textSecondary,
-  },
-  changeImageBtn: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  changeImageText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  slotContainer: {
+  error: {
+    fontFamily: F.jakartaSemiBold,
+    fontSize: 11,
+    color: C.danger,
     marginTop: 4,
   },
-  slotScroll: {
-    paddingRight: 20,
-    paddingBottom: 4,
+  availability: {
+    gap: 16,
+    marginTop: 17,
   },
-  slotChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginRight: 8,
-  },
-  activeSlotChip: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  slotChipText: {
-    ...Typography.body,
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  activeSlotChipText: {
-    color: Colors.background,
-    fontWeight: 'bold',
-  },
-  input: {
-    backgroundColor: Colors.surface,
-    height: 50,
-    borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    color: Colors.text,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  toggleBtn: {
-    flex: 1,
-    height: 48,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  activeToggle: {
-    backgroundColor: Colors.primaryDark,
-    borderColor: Colors.primary,
-  },
-  toggleBtnText: {
-    ...Typography.body,
-    fontWeight: 'bold',
-    color: Colors.textSecondary,
-  },
-  activeToggleText: {
-    color: Colors.background,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  priceInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Spacing.md,
-  },
-  currency: {
-    ...Typography.h3,
-    marginRight: 8,
-  },
-  priceInput: {
-    flex: 1,
-    height: 50,
-    color: Colors.text,
-  },
-  hint: {
-    ...Typography.caption,
-    fontSize: 10,
-    marginTop: 6,
-    fontStyle: 'italic',
-  },
-  errorHint: {
-    ...Typography.caption,
-    color: Colors.danger,
+  sectionLabel: {
+    fontFamily: F.jakartaBold,
     fontSize: 11,
-    marginTop: 6,
-    fontWeight: 'bold',
+    lineHeight: 16.5,
+    color: C.textMuted,
+    marginBottom: -10,
   },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  stepperBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  capacityText: {
-    ...Typography.body,
-    fontWeight: 'bold',
-  },
-  submitBtn: {
-    backgroundColor: Colors.primary,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Spacing.md,
-  },
-  submitBtnText: {
-    color: Colors.background,
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  submitBtnDisabled: {
-    opacity: 0.7,
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    backgroundColor: C.bg,
   },
 });

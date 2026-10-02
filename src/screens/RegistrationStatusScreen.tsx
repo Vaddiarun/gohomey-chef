@@ -1,295 +1,429 @@
-import React from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView,
-  StatusBarStyle
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Spacing, Typography } from '../theme';
-import { 
-  Clock, 
-  Phone, 
-  ShieldCheck, 
-  CheckCircle, 
-  XCircle,
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { format } from 'date-fns';
+import {
+  BadgeCheck,
+  CircleCheck,
+  Clock,
+  LifeBuoy,
   LogOut,
-  RefreshCw
+  RefreshCw,
+  Sparkles,
+  TriangleAlert,
+  Wallet,
+  X,
 } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
-import { useAuth } from '../context/AuthContext';
+import { C, F, Radius, Shadows, T } from '../theme';
+import { FadeInView, PressableScale, PrimaryButton, SafeGif, StatusBadge, StatusHalo } from '../components/ui';
+import type { BadgeTone } from '../components/ui';
+import { useAuth, getApplicationStatus } from '../context/AuthContext';
+
+const VERIFIED_CHECK = require('../assets/images/verified_check.gif');
+const SUPPORT_EMAIL = 'concierge@gohomeyy.com';
+
+const PENDING_COPY: Record<string, { title: string; body: string; step: number }> = {
+  PENDING_REVIEW: {
+    title: 'Verification in progress',
+    body: 'Our team is reviewing your documents. This usually takes less than 24 hours.',
+    step: 1,
+  },
+  PHONE_VETTING: {
+    title: 'Phone vetting',
+    body: "We'll call you shortly for a quick introduction to verify your profile details.",
+    step: 2,
+  },
+  KITCHEN_AUDIT: {
+    title: 'Kitchen audit',
+    body: 'A safety check of your kitchen is in progress. We will notify you of the result soon.',
+    step: 3,
+  },
+};
+
+const formatReviewed = (iso?: string) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : format(d, "d MMM, h:mm a");
+};
+
+const docTone = (status?: string): { label: string; tone: BadgeTone } => {
+  const s = (status || '').toUpperCase();
+  if (['VERIFIED', 'APPROVED', 'ACCEPTED'].includes(s)) return { label: 'Verified', tone: 'success' };
+  if (['REJECTED', 'DECLINED', 'FAILED'].includes(s)) return { label: 'Rejected', tone: 'danger' };
+  return { label: 'Under Review', tone: 'warning' };
+};
 
 export const RegistrationStatusScreen = ({ navigation, route }: any) => {
-  const status = route?.params?.status || 'PENDING_REVIEW';
-  const phone = route?.params?.phone;
-
-  const getStatusConfig = () => {
-    switch (status) {
-      case 'APPROVED':
-        return {
-          icon: <CheckCircle size={48} color={Colors.primary} />,
-          title: 'Welcome, Chef!',
-          description: 'Your application has been approved. You are ready to start managing your atelier and taking orders.',
-          bgColor: 'rgba(74, 222, 128, 0.1)',
-          step: 4
-        };
-      case 'PENDING_REVIEW':
-        return {
-          icon: <Clock size={48} color={Colors.primary} />,
-          title: 'Under Review',
-          description: 'Our concierge team is reviewing your documents. This usually takes less than 24 hours.',
-          bgColor: 'rgba(74, 222, 128, 0.1)',
-          step: 1
-        };
-      case 'PHONE_VETTING':
-        return {
-          icon: <Phone size={48} color="#06B6D4" />,
-          title: 'Phone Vetting',
-          description: 'We will be reaching out to you for a brief introductory call to verify your profile details.',
-          bgColor: 'rgba(6, 182, 212, 0.1)',
-          step: 2
-        };
-      case 'KITCHEN_AUDIT':
-        return {
-          icon: <ShieldCheck size={48} color="#F59E0B" />,
-          title: 'Kitchen Audit',
-          description: 'A safety inspection of your kitchen workspace is in progress. We will notify you of the results soon.',
-          bgColor: 'rgba(245, 158, 11, 0.1)',
-          step: 3
-        };
-      case 'REJECTED':
-        return {
-          icon: <XCircle size={48} color="#EF4444" />,
-          title: 'Application Declined',
-          description: 'Unfortunately, your application was not approved at this time. Please contact support for more details.',
-          bgColor: 'rgba(239, 68, 68, 0.1)',
-          step: 0
-        };
-      default:
-        return {
-          icon: <Clock size={48} color={Colors.primary} />,
-          title: 'Application Status',
-          description: 'We are processing your application. Please check back later.',
-          bgColor: 'rgba(74, 222, 128, 0.1)',
-          step: 1
-        };
-    }
-  };
-
-  const config = getStatusConfig();
-  const { login, logout, fetchProfile, token: sessionToken } = useAuth();
+  const { login, logout, fetchProfile, user, token: sessionToken } = useAuth();
+  // Prefer the live profile so "Check for updates" re-renders with the new state.
+  const status: string = getApplicationStatus(user) || String(route?.params?.status || 'PENDING_REVIEW').toUpperCase();
   const token = route?.params?.token || sessionToken;
+  const insets = useSafeAreaInsets();
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Confirm the latest review state on open — once admin approves, the
+  // navigator switches to the dashboard on its own.
+  useEffect(() => {
+    if (sessionToken) fetchProfile();
+  }, []);
 
   const handleCheckForUpdates = async () => {
+    setRefreshing(true);
     await fetchProfile();
+    setRefreshing(false);
     Toast.show({ type: 'info', text1: 'Status refreshed' });
   };
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Text style={styles.brandTitle}>GO HOMEYY</Text>
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={() => logout()}
-        >
-          <LogOut size={20} color={Colors.textSecondary} />
-        </TouchableOpacity>
-      </View>
+  const contactSupport = () =>
+    Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Chef verification')}`).catch(() =>
+      Toast.show({ type: 'info', text1: 'Contact support', text2: SUPPORT_EMAIL })
+    );
 
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={[styles.statusIconContainer, { backgroundColor: config.bgColor }]}>
-          {config.icon}
+  const supportButton = (
+    <PressableScale style={styles.outlineBtn} onPress={contactSupport}>
+      <LifeBuoy size={18} color={C.textInk} strokeWidth={1.65} />
+      <Text style={styles.outlineText}>Contact support</Text>
+    </PressableScale>
+  );
+
+  const logoutLink = (
+    <Pressable onPress={() => logout()} style={styles.logout} hitSlop={8}>
+      <LogOut size={14} color={C.textMuted3} />
+      <Text style={styles.logoutText}>Log out</Text>
+    </Pressable>
+  );
+
+  let content: React.ReactNode;
+
+  if (status === 'APPROVED') {
+    content = (
+      <>
+        <View style={styles.hero}>
+          <StatusHalo color={C.success} halo={C.successHalo} haloInner={C.successHaloInner}>
+            <SafeGif source={VERIFIED_CHECK} style={styles.checkGif} />
+          </StatusHalo>
+          <FadeInView delay={260} style={styles.heroText}>
+            <Text style={[T.statusTitle, styles.center]}>You're verified</Text>
+            <Text style={[T.statusBody, styles.center]}>Orders, menus and payouts are unlocked.</Text>
+          </FadeInView>
         </View>
 
-        <Text style={styles.statusTitle}>{config.title}</Text>
-        <Text style={styles.statusDescription}>{config.description}</Text>
-
-        <View style={styles.timeline}>
+        <View style={styles.statRow}>
           {[
-            { label: 'Documents Submitted', active: config.step >= 1 },
-            { label: 'Phone Vetting', active: config.step >= 2 },
-            { label: 'Kitchen Audit', active: config.step >= 3 },
-            { label: 'Final Approval', active: config.step >= 4 }
-          ].map((item, index) => (
-            <View key={index} style={styles.timelineItem}>
-              <View style={[
-                styles.dot, 
-                item.active && styles.activeDot,
-                index === 0 && { marginTop: 0 }
-              ]} />
-              {index < 3 && <View style={[styles.line, item.active && styles.activeLine]} />}
-              <Text style={[styles.timelineLabel, item.active && styles.activeLabel]}>
-                {item.label}
-              </Text>
-            </View>
+            { value: 'Verified', label: 'Status', Icon: BadgeCheck },
+            { value: 'Enabled', label: 'Payouts', Icon: Wallet },
+          ].map(({ value, label, Icon }, i) => (
+            <FadeInView key={label} delay={360 + i * 90} style={styles.statCard}>
+              <View style={styles.statIcon}>
+                <Icon size={16} color={C.success} strokeWidth={1.33} />
+              </View>
+              <View style={styles.statText}>
+                <Text style={T.statusTitle}>{value}</Text>
+                <Text style={styles.statLabel}>{label}</Text>
+              </View>
+            </FadeInView>
           ))}
         </View>
 
-        <View style={styles.supportBox}>
-          <Text style={styles.supportTitle}>Need Help?</Text>
-          <Text style={styles.supportText}>Contact our support team at concierge@gohomeyy.com</Text>
+        <FadeInView delay={540} style={styles.tip}>
+          <Sparkles size={16} color={C.success} strokeWidth={1.33} style={styles.tipIcon} />
+          <Text style={styles.tipText}>Go online now — new chefs get boosted visibility for 48 hours.</Text>
+        </FadeInView>
+
+        <FadeInView delay={620} style={styles.fullWidth}>
+          <PrimaryButton label="Go to Dashboard" onPress={() => login(token)} />
+        </FadeInView>
+      </>
+    );
+  } else if (status === 'REJECTED') {
+    const reviewed = formatReviewed(user?.reviewed_at);
+    const reason = user?.rejection_reason;
+    content = (
+      <>
+        <View style={styles.hero}>
+          <StatusHalo color={C.danger} halo={C.dangerHalo} haloInner={C.dangerHaloInner}>
+            <X size={29} color={C.white} strokeWidth={3.6} />
+          </StatusHalo>
+          <FadeInView delay={260} style={styles.heroText}>
+            <Text style={[T.statusTitle, styles.center]}>Verification rejected</Text>
+            <Text style={[T.statusBody, styles.center]}>
+              {reviewed ? `Reviewed on ${reviewed}` : 'Your application was not approved this time.'}
+            </Text>
+          </FadeInView>
         </View>
 
-        {status === 'APPROVED' ? (
-          <TouchableOpacity 
-            style={styles.refreshBtn}
-            onPress={() => {
-              console.log('Navigation: Status screen manually jumping to Dashboard');
-              login(token);
-            }}
-          >
-            <CheckCircle size={20} color={Colors.background} style={{ marginRight: 8 }} />
-            <Text style={styles.refreshText}>GO TO DASHBOARD</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.refreshBtn}
-            onPress={handleCheckForUpdates}
-          >
-            <RefreshCw size={20} color={Colors.background} style={{ marginRight: 8 }} />
-            <Text style={styles.refreshText}>CHECK FOR UPDATES</Text>
-          </TouchableOpacity>
-        )}
+        <FadeInView delay={360} style={styles.reasonBox}>
+          <TriangleAlert size={18} color={C.danger} strokeWidth={1.5} style={styles.reasonIcon} />
+          <View style={styles.reasonText}>
+            <Text style={styles.reasonTitle}>{reason || 'Some details need another look'}</Text>
+            <Text style={styles.reasonBody}>
+              {user?.rejection_details ||
+                (reason
+                  ? 'Retake in bright light with the full document in frame.'
+                  : 'Please re-upload clear documents or contact support for details.')}
+            </Text>
+          </View>
+        </FadeInView>
+
+        <FadeInView delay={440} style={styles.actions}>
+          <PrimaryButton
+            label="Re - upload document"
+            showChevron={false}
+            onPress={() => navigation.navigate('RegisterStep3', { token, resubmit: true })}
+          />
+          {supportButton}
+        </FadeInView>
+      </>
+    );
+  } else {
+    const copy = PENDING_COPY[status] ?? {
+      title: 'Application status',
+      body: 'We are processing your application. Please check back later.',
+      step: 1,
+    };
+    const rows: { label: string; badge: { label: string; tone: BadgeTone } }[] = user?.documents?.length
+      ? user.documents.map((d) => ({ label: d.name || d.type || 'Document', badge: docTone(d.status) }))
+      : ['Documents', 'Phone vetting', 'Kitchen audit', 'Final approval'].map((label, i) => {
+          // Stage 1..4; earlier stages are done, the current one is in review.
+          const stage = i + 1;
+          const badge: { label: string; tone: BadgeTone } =
+            stage < copy.step
+              ? { label: 'Verified', tone: 'success' }
+              : stage === copy.step
+              ? { label: 'Under Review', tone: 'warning' }
+              : { label: 'Pending', tone: 'neutral' };
+          return { label, badge };
+        });
+
+    content = (
+      <>
+        <View style={styles.hero}>
+          <StatusHalo color={C.primary} halo="rgba(252,65,0,0.12)" haloInner="rgba(252,65,0,0.18)">
+            <Clock size={28} color={C.white} strokeWidth={2.4} />
+          </StatusHalo>
+          <FadeInView delay={260} style={styles.heroText}>
+            <Text style={[T.statusTitle, styles.center]}>{copy.title}</Text>
+            <Text style={[T.statusBody, styles.center]}>{copy.body}</Text>
+          </FadeInView>
+        </View>
+
+        <FadeInView delay={360} style={styles.checklist}>
+          {rows.map((row, i) => (
+            <FadeInView
+              key={row.label + i}
+              delay={420 + i * 70}
+              offset={8}
+              style={[styles.checkRow, i < rows.length - 1 && styles.checkRowDivider]}
+            >
+              <CircleCheck
+                size={20}
+                strokeWidth={1.67}
+                color={row.badge.tone === 'success' ? C.successDeep : row.badge.tone === 'danger' ? C.danger : row.badge.tone === 'warning' ? C.warning : C.iconMuted}
+              />
+              <Text style={styles.checkLabel}>{row.label}</Text>
+              <StatusBadge label={row.badge.label} tone={row.badge.tone} />
+            </FadeInView>
+          ))}
+        </FadeInView>
+
+        <FadeInView delay={720} style={styles.actions}>
+          <PrimaryButton label="Check for updates" onPress={handleCheckForUpdates} loading={refreshing} showChevron={false} />
+          {supportButton}
+        </FadeInView>
+      </>
+    );
+  }
+
+  return (
+    <View style={styles.root}>
+      <StatusBar style="dark" />
+      <ScrollView
+        contentContainerStyle={[styles.container, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {content}
+        <FadeInView delay={800}>{logoutLink}</FadeInView>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  brandTitle: {
-    ...Typography.body,
-    fontWeight: 'bold',
-    letterSpacing: 4,
-    color: Colors.text,
-  },
-  logoutBtn: {
-    padding: 8,
+    backgroundColor: C.surface,
   },
   container: {
     flexGrow: 1,
-    padding: Spacing.xl,
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  statusIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
+    paddingHorizontal: 20,
+    gap: 16,
   },
-  statusTitle: {
-    ...Typography.h1,
-    fontSize: 28,
-    marginBottom: 16,
+  center: {
     textAlign: 'center',
   },
-  statusDescription: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 40,
-    paddingHorizontal: Spacing.md,
-  },
-  timeline: {
+  fullWidth: {
     width: '100%',
-    paddingHorizontal: Spacing.lg,
-    marginBottom: 40,
   },
-  timelineItem: {
+  hero: {
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  heroText: {
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 4,
+  },
+  checkGif: {
+    width: 29,
+    height: 29,
+  },
+  statRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  statCard: {
+    flex: 1,
+    height: 80,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.borderCard,
+    backgroundColor: C.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    gap: 8,
+    ...Shadows.card,
+  },
+  statIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: C.successBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statText: {
+    alignItems: 'center',
+    minWidth: 77,
+  },
+  statLabel: {
+    fontFamily: F.interRegular,
+    fontSize: 11.5,
+    lineHeight: 17.25,
+    color: C.textMuted3,
+  },
+  tip: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    height: 60,
-  },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.border,
-    zIndex: 1,
-  },
-  activeDot: {
-    backgroundColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-  },
-  line: {
-    position: 'absolute',
-    left: 5,
-    top: 12,
-    width: 2,
-    height: 48,
-    backgroundColor: Colors.border,
-  },
-  activeLine: {
-    backgroundColor: Colors.primary,
-  },
-  timelineLabel: {
-    ...Typography.caption,
-    marginLeft: 24,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  activeLabel: {
-    color: Colors.text,
-    fontWeight: 'bold',
-  },
-  supportBox: {
-    backgroundColor: Colors.surface,
-    padding: 20,
-    borderRadius: 16,
+    gap: 8,
+    backgroundColor: C.successBg,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     width: '100%',
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
-  supportTitle: {
-    ...Typography.body,
-    fontWeight: 'bold',
-    marginBottom: 8,
+  tipIcon: {
+    marginTop: 1,
   },
-  supportText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
+  tipText: {
+    flex: 1,
+    fontFamily: F.interRegular,
+    fontSize: 12.3,
+    lineHeight: 18.75,
+    color: C.success,
+    textAlign: 'center',
   },
-  refreshBtn: {
+  reasonBox: {
     flexDirection: 'row',
-    backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 16,
+    gap: 10,
     width: '100%',
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: C.dangerBg,
+  },
+  reasonIcon: {
+    marginTop: 2,
+  },
+  reasonText: {
+    flex: 1,
+    gap: 2,
+  },
+  reasonTitle: {
+    fontFamily: F.interBold,
+    fontSize: 13.5,
+    lineHeight: 20.25,
+    color: C.danger,
+  },
+  reasonBody: {
+    fontFamily: F.interRegular,
+    fontSize: 12.3,
+    lineHeight: 18.75,
+    color: C.danger,
+    opacity: 0.85,
+  },
+  actions: {
+    width: '100%',
+    gap: 10,
+  },
+  outlineBtn: {
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.borderCard,
+    backgroundColor: C.surface,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    gap: 8,
   },
-  refreshText: {
-    color: Colors.background,
-    fontWeight: 'bold',
-    fontSize: 14,
+  outlineText: {
+    fontFamily: F.interBold,
+    fontSize: 15,
+    lineHeight: 22.5,
+    letterSpacing: -0.15,
+    color: C.textInk,
+  },
+  checklist: {
+    width: '100%',
+    backgroundColor: C.surface,
+    borderRadius: Radius.tile,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  checkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  checkRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  checkLabel: {
+    flex: 1,
+    fontFamily: F.jakartaBold,
+    fontSize: 12,
+    lineHeight: 18,
+    color: C.textStrong,
+  },
+  logout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  logoutText: {
+    fontFamily: F.interMedium,
+    fontSize: 13,
+    color: C.textMuted3,
   },
 });

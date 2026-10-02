@@ -1,29 +1,24 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TextInput, 
-  TouchableOpacity, 
-  Switch,
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Image
-} from 'react-native';
-import { MapPin, Calendar, Clock, ChevronLeft, Info, Camera, Users } from 'lucide-react-native';
-import { Colors, Spacing, Typography } from '../theme';
-import { useSocial } from '../context/SocialContext';
-import { useAuth } from '../context/AuthContext';
-import MapView, { Marker, Region } from '../components/PlatformMap';
-import { LocationSearchInput } from '../components/LocationSearchInput';
+import { View, Text, StyleSheet, ScrollView, TextInput, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { format } from 'date-fns';
+import { Calendar, Camera, Clock, Image as ImageIcon, IndianRupee } from 'lucide-react-native';
+import Toast from 'react-native-toast-message';
+import { C, F, Radius } from '../theme';
+import { ActionSheet, FadeInView, FormField, KitchenHeader, PrimaryButton, Toggle, UploadTile } from '../components/ui';
+import type { PickedFile } from '../components/ui';
+import MapView, { Marker, Region } from '../components/PlatformMap';
+import { LocationSearchInput } from '../components/LocationSearchInput';
+import { useSocial } from '../context/SocialContext';
+import { useAuth } from '../context/AuthContext';
 import { getRequiredPrice, isPriceAboveLimit, MAX_PRICE } from '../utils/price';
-
-const isLocalFileUri = (uri?: string | null) => typeof uri === 'string' && uri.startsWith('file://');
+import { compressImage } from '../utils/compressImage';
+import { KeyboardAware } from '../components/ui/KeyboardAware';
+import { errorText } from '../utils/apiErrors';
 
 const uploadImageToCloudinary = async (imageUri: string) => {
   const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
@@ -36,8 +31,8 @@ const uploadImageToCloudinary = async (imageUri: string) => {
   const filename = imageUri.split('/').pop() || `social_event_${Date.now()}.jpg`;
   const match = /\.(\w+)$/.exec(filename);
   const type = match ? `image/${match[1]}` : 'image/jpeg';
-
   const formData = new FormData();
+
   formData.append('file', {
     uri: imageUri,
     name: filename,
@@ -50,8 +45,8 @@ const uploadImageToCloudinary = async (imageUri: string) => {
     method: 'POST',
     body: formData,
   });
-
   const result = await response.json().catch(() => ({}));
+
   if (!response.ok || !result.secure_url) {
     throw new Error(result.error?.message || 'Failed to upload social image');
   }
@@ -59,491 +54,321 @@ const uploadImageToCloudinary = async (imageUri: string) => {
   return result.secure_url as string;
 };
 
+const formatReverse = (a: Location.LocationGeocodedAddress) =>
+  `${a.name || ''} ${a.street || ''}, ${a.city || ''}, ${a.region || ''}`.trim().replace(/^ ,/, '');
+
+type PickerTarget = 'date' | 'start' | 'end' | null;
+
+/** Pressable field that opens a native date/time picker (Figma "Date" / "Start Time"). */
+const PickerField = ({ label, value, placeholder, icon, onPress }: { label: string; value?: string; placeholder: string; icon: React.ReactNode; onPress: () => void }) => (
+  <View style={styles.group}>
+    <Text style={styles.label}>{label}</Text>
+    <Pressable style={styles.box} onPress={onPress}>
+      {icon}
+      <Text style={[styles.boxText, !value && styles.boxPlaceholder]}>{value || placeholder}</Text>
+    </Pressable>
+  </View>
+);
+
+/** Add Social Table (Figma 76:14267). Creates via the existing POST social. */
 export const CreateEventScreen = ({ navigation }: any) => {
   const { createEvent } = useSocial();
   const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const insets = useSafeAreaInsets();
 
-  // Form State
-  const [title, setTitle] = useState('');
+  const [caption, setCaption] = useState('');
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState(new Date().toISOString());
-  const [location, setLocation] = useState('');
   const [price, setPrice] = useState('');
   const [maleSlots, setMaleSlots] = useState('5');
   const [femaleSlots, setFemaleSlots] = useState('5');
   const [socialBalance, setSocialBalance] = useState(true);
-  const [imageUrl, setImageUrl] = useState('');
-  
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [image, setImage] = useState<PickedFile | null>(null);
+  const [day, setDay] = useState<Date | null>(null);
+  const [start, setStart] = useState<Date | null>(null);
+  const [end, setEnd] = useState<Date | null>(null);
+  const [picker, setPicker] = useState<PickerTarget>(null);
+  const [location, setLocation] = useState('');
+  const [locationQuery, setLocationQuery] = useState('');
+  const [coordinates, setCoordinates] = useState({ latitude: 19.076, longitude: 72.8777 });
+  const [region, setRegion] = useState<Region>({ latitude: 19.076, longitude: 72.8777, latitudeDelta: 0.05, longitudeDelta: 0.05 });
+  const [photoSheet, setPhotoSheet] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const [region, setRegion] = useState<Region>({
-    latitude: 19.0760,
-    longitude: 72.8777,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
-  });
-  const [coordinates, setCoordinates] = useState({
-    latitude: 19.0760,
-    longitude: 72.8777,
-  });
   const parsedPrice = getRequiredPrice(price);
   const priceAboveLimit = isPriceAboveLimit(price);
 
-
-  const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setImageUrl(result.assets[0].uri);
+  const pick = async (useCamera: boolean) => {
+    const perm = useCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm.status !== 'granted') {
+      Toast.show({ type: 'error', text1: 'Permission Denied', text2: 'Allow access to add a cover photo.' });
+      return;
+    }
+    const opts = { allowsEditing: true, aspect: [16, 9] as [number, number], quality: 0.8 };
+    const result = useCamera
+      ? await ImagePicker.launchCameraAsync(opts)
+      : await ImagePicker.launchImageLibraryAsync({ ...opts, mediaTypes: ['images'] });
+    if (!result.canceled && result.assets?.length) {
+      const asset = result.assets[0];
+      setImage(await compressImage(asset.uri, asset.width));
     }
   };
 
+  const setFromCoordinate = (latitude: number, longitude: number) => {
+    setCoordinates({ latitude, longitude });
+    setRegion((r) => ({ ...r, latitude, longitude }));
+    Location.reverseGeocodeAsync({ latitude, longitude }).then((r) => {
+      if (r.length > 0) {
+        const f = formatReverse(r[0]);
+        setLocation(f);
+        setLocationQuery(f);
+      }
+    });
+  };
+
+  const combine = (d: Date, t: Date) => {
+    const out = new Date(d);
+    out.setHours(t.getHours(), t.getMinutes(), 0, 0);
+    return out;
+  };
+
   const handleSave = async () => {
-    if (!title || !description || !location || parsedPrice === null) {
-      Alert.alert('Error', 'Please fill in title, description, location, and a valid price');
+    if (!caption.trim() || !description.trim() || !location.trim() || parsedPrice === null) {
+      Toast.show({
+        type: 'error',
+        text1: 'Missing Details',
+        text2: priceAboveLimit ? `Price can't be more than ₹${MAX_PRICE}.` : 'Please add a caption, description, price and location.',
+      });
+      return;
+    }
+    if (!day || !start || !end) {
+      Toast.show({ type: 'error', text1: 'Date & time', text2: 'Pick the date, start time and end time.' });
+      return;
+    }
+    const startDate = combine(day, start);
+    const endDate = combine(day, end);
+    if (endDate <= startDate) endDate.setDate(endDate.getDate() + 1); // runs past midnight
+    if (startDate.getTime() < Date.now()) {
+      Toast.show({ type: 'error', text1: 'Start time', text2: 'The start time has already passed.' });
+      return;
+    }
+    const slotsTotal = (parseInt(maleSlots, 10) || 0) + (parseInt(femaleSlots, 10) || 0);
+    if (slotsTotal < 1) {
+      Toast.show({ type: 'error', text1: 'Slot distribution', text2: 'Add at least one seat.' });
       return;
     }
 
     setLoading(true);
-
-    const startDate = new Date(date);
-    const endDate = new Date(startDate);
-    endDate.setHours(startDate.getHours() + 3);
-    const slotsTotal = parseInt(maleSlots) + parseInt(femaleSlots) || 10;
-    const numericPrice = parsedPrice;
-    let imageUrlToSend = imageUrl;
-
-    if (isLocalFileUri(imageUrl)) {
-      const uploadedUrl = await uploadImageToCloudinary(imageUrl);
-      imageUrlToSend = uploadedUrl || user?.kitchen_photo_url || '';
-      if (!uploadedUrl && imageUrlToSend) {
-        console.log('Cloudinary upload env missing; using chef kitchen_photo_url for social image_url');
+    try {
+      let imageUrlToSend = '';
+      if (image) {
+        const uploadedUrl = await uploadImageToCloudinary(image.uri);
+        imageUrlToSend = uploadedUrl || user?.kitchen_photo_url || '';
+        if (!uploadedUrl && imageUrlToSend) {
+          console.log('Cloudinary upload env missing; using chef kitchen_photo_url for social image_url');
+        }
       }
-    }
 
-    const eventData = {
-      title,
-      description,
-      date,
-      end_date: endDate.toISOString(),
-      location,
-      price: numericPrice,
-      slots_total: slotsTotal,
-      social_balance: socialBalance,
-      image_url: imageUrlToSend,
-    };
-
-    console.log('Sending Event Data:', JSON.stringify(eventData, null, 2));
-    const success = await createEvent(eventData);
-
-    setLoading(false);
-
-    if (success) {
-      Alert.alert('Success', 'Social event created successfully!', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
-    } else {
-      Alert.alert('Error', 'Failed to create event. Please try again.');
+      const eventData = {
+        title: caption.trim(),
+        description: description.trim(),
+        date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
+        location: location.trim(),
+        price: parsedPrice,
+        slots_total: slotsTotal,
+        social_balance: socialBalance,
+        image_url: imageUrlToSend,
+      };
+      console.log('Sending Event Data:', JSON.stringify(eventData, null, 2));
+      const success = await createEvent(eventData);
+      if (success) {
+        navigation.replace('Success', { kind: 'social' });
+      } else {
+        Toast.show({ type: 'error', text1: 'Publishing failed', text2: 'Could not create the Social Table. Please try again.' });
+      }
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Upload failed', text2: errorText(err, 'Please try again.') });
+    } finally {
+      setLoading(false);
     }
   };
 
+  const pickerValue = picker === 'date' ? day ?? new Date() : picker === 'start' ? start ?? new Date() : end ?? start ?? new Date();
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.form}>
-        {/* Image Picker */}
-        <TouchableOpacity 
-          style={styles.imagePicker} 
-          onPress={handlePickImage}
-          activeOpacity={0.7}
-        >
-          {imageUrl ? (
-            <Image source={{ uri: imageUrl }} style={styles.pickedImage} />
-          ) : (
-            <View style={styles.imagePlaceholder}>
-              <Camera size={32} color={Colors.textSecondary} />
-              <Text style={styles.imagePlaceholderText}>Add Party Cover Photo</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {/* Basic Info */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Event/Party Title *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Tacos & Beats House Party"
-            placeholderTextColor={Colors.textSecondary}
-            value={title}
-            onChangeText={setTitle}
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Description *</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Describe the party setup, whether it is in your home kitchen, rooftop, or custom venue, and what guests should expect..."
-            placeholderTextColor={Colors.textSecondary}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>Date</Text>
-            <TouchableOpacity style={styles.pickerTrigger} onPress={() => setShowDatePicker(true)}>
-              <Calendar size={18} color={Colors.primary} />
-              <Text style={styles.pickerValue}>{new Date(date).toLocaleDateString()}</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={[styles.inputGroup, { flex: 1, marginLeft: Spacing.md }]}>
-            <Text style={styles.label}>Time</Text>
-            <TouchableOpacity style={styles.pickerTrigger} onPress={() => setShowTimePicker(true)}>
-              <Clock size={18} color={Colors.primary} />
-              <Text style={styles.pickerValue}>
-                {new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Price (₹)</Text>
-          <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={price}
-            onChangeText={setPrice}
-          />
-          {priceAboveLimit ? (
-            <Text style={styles.errorHint}>Price cannot exceed ₹{MAX_PRICE.toLocaleString('en-IN')}.</Text>
-          ) : null}
-        </View>
-
-        {/* Slots Distribution */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Users size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Slot Distribution</Text>
-          </View>
-          
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Male Slots</Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                value={maleSlots}
-                onChangeText={setMaleSlots}
-              />
-            </View>
-            <View style={[styles.inputGroup, { flex: 1, marginLeft: Spacing.md }]}>
-              <Text style={styles.label}>Female Slots</Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                value={femaleSlots}
-                onChangeText={setFemaleSlots}
-              />
-            </View>
-          </View>
-
-          <View style={styles.switchRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.switchLabel}>Maintain Social Balance</Text>
-              <Text style={styles.switchSubLabel}>Ensure equal gender participation</Text>
-            </View>
-            <Switch
-              value={socialBalance}
-              onValueChange={setSocialBalance}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor={Platform.OS === 'ios' ? '#fff' : socialBalance ? Colors.primaryDark : '#f4f3f4'}
-            />
-          </View>
-        </View>
-
-        {/* Location */}
-        <View style={styles.inputGroup}>
-          <View style={styles.sectionHeader}>
-            <MapPin size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Location Selection</Text>
-          </View>
-          
-          <Text style={styles.label}>Search Location *</Text>
-          <LocationSearchInput
-            value={location}
-            onChangeText={setLocation}
-            onLocationSelected={({ address, latitude, longitude }) => {
-              setLocation(address);
-              setCoordinates({ latitude, longitude });
-              setRegion({ latitude, longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
-            }}
-            placeholder="Search for a place..."
-          />
-
-          <View style={styles.mapSelectionContainer}>
-            <MapView
-              style={styles.map}
-              region={region}
-              onPress={(e: any) => {
-                const { latitude, longitude } = e.nativeEvent.coordinate;
-                setCoordinates({ latitude, longitude });
-                setRegion({ ...region, latitude, longitude });
-                Location.reverseGeocodeAsync({ latitude, longitude }).then(r => {
-                  if (r.length > 0) {
-                    const a = r[0];
-                    setLocation(`${a.name || ''} ${a.street || ''}, ${a.city || ''}, ${a.region || ''}`.replace(/^ , /, '').trim());
-                  }
-                }).catch(() => {});
-              }}
-            >
-              <Marker
-                coordinate={coordinates}
-                draggable
-                onDragEnd={(e: any) => {
-                  const { latitude, longitude } = e.nativeEvent.coordinate;
-                  setCoordinates({ latitude, longitude });
-                  Location.reverseGeocodeAsync({ latitude, longitude }).then(r => {
-                    if (r.length > 0) {
-                      const a = r[0];
-                      setLocation(`${a.name || ''} ${a.street || ''}, ${a.city || ''}, ${a.region || ''}`.replace(/^ , /, '').trim());
-                    }
-                  }).catch(() => {});
-                }}
-              />
-            </MapView>
-            <View style={styles.mapOverlay}>
-              <Text style={styles.mapHint}>Tap on map or drag marker to set location</Text>
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity 
-          style={[styles.submitBtn, (loading || parsedPrice === null) && styles.disabledBtn]}
-          onPress={handleSave}
-          disabled={loading || parsedPrice === null}
-        >
-          {loading ? (
-            <ActivityIndicator color={Colors.background} />
-          ) : (
-            <Text style={styles.submitBtnText}>Publish Event</Text>
-          )}
-        </TouchableOpacity>
-
-        {showDatePicker && (
-          <DateTimePicker
-            value={new Date(date)}
-            mode="date"
-            display="default"
-            onChange={(event, selectedDate) => {
-              setShowDatePicker(false);
-              if (selectedDate) {
-                const currentDate = new Date(date);
-                currentDate.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
-                setDate(currentDate.toISOString());
-              }
-            }}
-          />
-        )}
-
-        {showTimePicker && (
-          <DateTimePicker
-            value={new Date(date)}
-            mode="time"
-            display="default"
-            onChange={(event, selectedDate) => {
-              setShowTimePicker(false);
-              if (selectedDate) {
-                const currentDate = new Date(date);
-                currentDate.setHours(selectedDate.getHours(), selectedDate.getMinutes());
-                setDate(currentDate.toISOString());
-              }
-            }}
-          />
-        )}
+    <View style={styles.root}>
+      <StatusBar style="dark" />
+      <View style={{ paddingTop: insets.top }}>
+        <KitchenHeader
+          kitchenName="Add Social Table"
+          subtitle="GoHomeyy Chef"
+          ownerName={user?.name}
+          onBack={() => navigation.goBack()}
+          onWallet={() => navigation.navigate('Wallet')}
+          onProfile={() => navigation.navigate('Profile')}
+        />
       </View>
-    </ScrollView>
+
+      <KeyboardAware style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <FadeInView>
+            <UploadTile tone="cream" icon="coral" file={image} onPress={() => setPhotoSheet(true)} />
+          </FadeInView>
+
+          <FadeInView delay={50}>
+            <FormField label="Caption" value={caption} onChangeText={setCaption} placeholder="Fresh lunch is ready for tomorrow ✦" />
+          </FadeInView>
+          <FadeInView delay={90}>
+            <FormField
+              label="Description"
+              value={description}
+              onChangeText={setDescription}
+              placeholder="What guests should expect"
+              multiline
+              style={styles.multiline}
+            />
+          </FadeInView>
+          <FadeInView delay={130}>
+            <FormField
+              label="Base price"
+              value={price}
+              onChangeText={(v) => setPrice(v.replace(/[^\d.]/g, ''))}
+              placeholder="220"
+              keyboardType="numeric"
+              icon={<IndianRupee size={16} color={C.iconMuted} strokeWidth={1.33} />}
+            />
+            {priceAboveLimit && <Text style={styles.error}>Price can't be more than ₹{MAX_PRICE}.</Text>}
+          </FadeInView>
+
+          <FadeInView delay={170} style={styles.group}>
+            <Text style={styles.label}>Slot Distribution</Text>
+            <View style={styles.slotCard}>
+              <View style={styles.row}>
+                <View style={styles.flex}>
+                  <FormField label="Male" value={maleSlots} onChangeText={(v) => setMaleSlots(v.replace(/\D/g, ''))} keyboardType="number-pad" placeholder="Enter Number" />
+                </View>
+                <View style={styles.flex}>
+                  <FormField label="Female" value={femaleSlots} onChangeText={(v) => setFemaleSlots(v.replace(/\D/g, ''))} keyboardType="number-pad" placeholder="Enter Number" />
+                </View>
+              </View>
+              <View style={styles.balanceRow}>
+                <Text style={styles.balanceText}>Maintain social Balance</Text>
+                <Toggle value={socialBalance} onValueChange={setSocialBalance} activeColor="#E64611" />
+              </View>
+            </View>
+          </FadeInView>
+
+          <FadeInView delay={210}>
+            <PickerField
+              label="Date"
+              value={day ? format(day, 'EEE, d MMM yyyy') : undefined}
+              placeholder="Select Date"
+              icon={<Calendar size={16} color={C.textStrong} strokeWidth={1.33} />}
+              onPress={() => setPicker('date')}
+            />
+          </FadeInView>
+          <FadeInView delay={250} style={styles.row}>
+            <View style={styles.flex}>
+              <PickerField label="Start Time" value={start ? format(start, 'h:mm a') : undefined} placeholder="Enter Time" icon={<Clock size={16} color={C.textStrong} strokeWidth={1.33} />} onPress={() => setPicker('start')} />
+            </View>
+            <View style={styles.flex}>
+              <PickerField label="End Time" value={end ? format(end, 'h:mm a') : undefined} placeholder="Enter Time" icon={<Clock size={16} color={C.textStrong} strokeWidth={1.33} />} onPress={() => setPicker('end')} />
+            </View>
+          </FadeInView>
+
+          <FadeInView delay={290} style={[styles.group, { zIndex: 10 }]}>
+            <Text style={styles.label}>Add Location</Text>
+            <LocationSearchInput
+              variant="light"
+              value={locationQuery}
+              onChangeText={setLocationQuery}
+              onLocationSelected={({ address, latitude, longitude }) => {
+                setLocation(address);
+                setCoordinates({ latitude, longitude });
+                setRegion({ latitude, longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
+              }}
+              placeholder="Search options"
+            />
+            <View style={styles.map}>
+              <MapView
+                style={StyleSheet.absoluteFill}
+                region={region}
+                onPress={(e: any) => setFromCoordinate(e.nativeEvent.coordinate.latitude, e.nativeEvent.coordinate.longitude)}
+              >
+                <Marker
+                  coordinate={coordinates}
+                  draggable
+                  onDragEnd={(e: any) => setFromCoordinate(e.nativeEvent.coordinate.latitude, e.nativeEvent.coordinate.longitude)}
+                  title="Social Table"
+                />
+              </MapView>
+            </View>
+          </FadeInView>
+        </ScrollView>
+
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+          <PrimaryButton label="Publish" onPress={handleSave} loading={loading} />
+        </View>
+      </KeyboardAware>
+
+      {picker && (
+        <DateTimePicker
+          value={pickerValue}
+          mode={picker === 'date' ? 'date' : 'time'}
+          display="default"
+          minimumDate={picker === 'date' ? new Date() : undefined}
+          onChange={(_, selected) => {
+            const target = picker;
+            setPicker(null);
+            if (!selected) return;
+            if (target === 'date') setDay(selected);
+            else if (target === 'start') setStart(selected);
+            else setEnd(selected);
+          }}
+        />
+      )}
+
+      <ActionSheet
+        visible={photoSheet}
+        title="Cover photo"
+        subtitle="Show guests the table, the food or the venue"
+        options={[
+          { label: 'Take Photo', description: 'Use your camera', icon: Camera, onPress: () => pick(true) },
+          { label: 'Choose from Gallery', description: 'JPG or PNG from your phone', icon: ImageIcon, onPress: () => pick(false) },
+        ]}
+        onClose={() => setPhotoSheet(false)}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  form: {
-    padding: Spacing.lg,
-    paddingBottom: 40,
-  },
-  imagePicker: {
-    width: '100%',
-    height: 180,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
+  root: { flex: 1, backgroundColor: C.bg },
+  flex: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 1, paddingBottom: 32, gap: 15 },
+  row: { flexDirection: 'row', gap: 16 },
+  group: { gap: 6 },
+  label: { fontFamily: F.jakartaBold, fontSize: 11, lineHeight: 16.5, color: C.textMuted },
+  box: {
+    height: 52,
+    borderRadius: Radius.field,
     borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: Colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
-    overflow: 'hidden',
-  },
-  pickedImage: {
-    width: '100%',
-    height: '100%',
-  },
-  imagePlaceholder: {
-    alignItems: 'center',
-  },
-  imagePlaceholderText: {
-    ...Typography.caption,
-    marginTop: 8,
-    color: Colors.textSecondary,
-  },
-  inputGroup: {
-    marginBottom: Spacing.lg,
-  },
-  label: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginBottom: 8,
-    fontWeight: 'bold',
-  },
-  input: {
-    backgroundColor: Colors.surface,
-    color: Colors.text,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    fontSize: 16,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: Spacing.md,
-  },
-  searchInput: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    color: Colors.text,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    fontSize: 16,
-  },
-  textArea: {
-    minHeight: 100,
-  },
-  row: {
-    flexDirection: 'row',
-  },
-  pickerTrigger: {
+    borderColor: C.border,
+    backgroundColor: C.surface,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    gap: 12,
   },
-  pickerValue: {
-    color: Colors.text,
-    marginLeft: 8,
-  },
-  section: {
-    backgroundColor: Colors.surface + '40',
-    padding: Spacing.md,
-    borderRadius: 12,
-    marginBottom: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  sectionTitle: {
-    ...Typography.h3,
-    marginLeft: 8,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  switchLabel: {
-    ...Typography.body,
-    fontWeight: '600',
-  },
-  switchSubLabel: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-  },
-  mapSelectionContainer: {
-    height: 220,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  mapOverlay: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    padding: 8,
-    borderRadius: 4,
-  },
-  mapHint: {
-    color: '#fff',
-    fontSize: 10,
-    textAlign: 'center',
-  },
-  disabledBtn: {
-    opacity: 0.5,
-  },
-  errorHint: {
-    ...Typography.caption,
-    color: Colors.danger,
-    fontSize: 11,
-    marginTop: 6,
-    fontWeight: 'bold',
-  },
-  submitBtn: {
-    backgroundColor: Colors.primary,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: Spacing.xl,
-  },
-  submitBtnText: {
-    color: Colors.background,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  boxText: { fontFamily: F.jakartaSemiBold, fontSize: 13, color: C.textStrong },
+  boxPlaceholder: { color: C.textStrong },
+  multiline: { paddingTop: 0, textAlignVertical: 'center' },
+  error: { fontFamily: F.jakartaSemiBold, fontSize: 11, color: C.danger, marginTop: 4 },
+  slotCard: { backgroundColor: C.surface, borderRadius: Radius.field, padding: 15, gap: 8 },
+  balanceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 33 },
+  balanceText: { fontFamily: F.interBold, fontSize: 12, lineHeight: 22.5, color: C.textInk },
+  map: { height: 174, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
+  footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: C.bg },
 });

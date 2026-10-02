@@ -1,34 +1,34 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
   Image,
-  ActivityIndicator,
-  Alert,
   Modal,
-  Dimensions
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Spacing, Typography } from '../theme';
-import { 
-  ChevronLeft, 
-  Camera, 
-  FileText, 
-  CheckCircle,
-  HelpCircle,
-  Info,
-  Utensils,
-  X,
-  RefreshCw
-} from 'lucide-react-native';
+import { StatusBar } from 'expo-status-bar';
+import { Camera, CircleCheck, FileText, Image as ImageIcon, RefreshCw, X } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
+import { C, F, Radius, Shadows, T } from '../theme';
+import {
+  ActionSheet,
+  FadeInView,
+  OnboardingLayout,
+  PressableScale,
+  PrimaryButton,
+  StatusBadge,
+  UploadTile,
+} from '../components/ui';
+import type { SheetOption } from '../components/ui';
+import { friendlyApiError } from '../utils/apiErrors';
+import { REG_PROGRESS } from './registration/shared';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { refreshSession, readAuthPayload } from '../services/api';
+import { compressImage, byteSize, canCompressImages } from '../utils/compressImage';
 
 type FileAsset = {
   uri: string;
@@ -37,6 +37,21 @@ type FileAsset = {
 };
 
 const STEP_3_UPLOAD_TIMEOUT_MS = 120000;
+// api.gohomeyy.store answers 413 above ~1 MB per request (all three files together).
+const MAX_UPLOAD_BYTES = 950 * 1024;
+const MAX_PDF_BYTES = 400 * 1024;
+// Per-file cap so three documents always fit under MAX_UPLOAD_BYTES.
+const MAX_FILE_BYTES = 320 * 1024;
+
+const rejectOversized = (bytes: number) => {
+  if (bytes <= MAX_FILE_BYTES) return false;
+  Toast.show({
+    type: 'error',
+    text1: 'Photo too large',
+    text2: `This image is ${(bytes / 1024 / 1024).toFixed(1)} MB. Please use "Take Photo" or choose a smaller image.`,
+  });
+  return true;
+};
 
 const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs = STEP_3_UPLOAD_TIMEOUT_MS) => {
   const controller = new AbortController();
@@ -104,6 +119,23 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
   const [safetyCert, setSafetyCert] = useState<FileAsset | null>(null);
   const [kitchenPhoto, setKitchenPhoto] = useState<FileAsset | null>(null);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState<'documents' | 'review'>('documents');
+  const [sheet, setSheetContent] = useState<{ title: string; subtitle: string; options: SheetOption[] } | null>(null);
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const setSheet = (content: { title: string; subtitle: string; options: SheetOption[] }) => {
+    setSheetContent(content);
+    setSheetVisible(true);
+  };
+
+  // Hardware back on the checklist returns to the uploads page.
+  useEffect(() => {
+    if (page !== 'review') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setPage('documents');
+      return true;
+    });
+    return () => sub.remove();
+  }, [page]);
 
   // Pending image state for preview
   const [pendingFile, setPendingFile] = useState<FileAsset | null>(null);
@@ -128,10 +160,25 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
+        const mime = asset.mimeType || 'application/octet-stream';
+        if (mime.startsWith('image/')) {
+          const compressed = await compressImage(asset.uri);
+          if (rejectOversized(await byteSize(compressed.uri))) return;
+          setFile(compressed);
+          return;
+        }
+        if ((asset.size ?? 0) > MAX_PDF_BYTES) {
+          Toast.show({
+            type: 'error',
+            text1: 'File too large',
+            text2: 'Please choose a PDF under 400 KB, or take a photo of the document instead.',
+          });
+          return;
+        }
         setFile({
           uri: asset.uri,
           name: asset.name || 'document',
-          type: asset.mimeType || 'application/octet-stream'
+          type: mime
         });
       }
     } catch (err) {
@@ -144,36 +191,37 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
       if (useCamera) {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Permission Denied', 'Camera permission is required to take photos.');
+          Toast.show({ type: 'error', text1: 'Permission Denied', text2: 'Camera permission is required to take photos.' });
           return;
         }
       }
 
-      // Keep uploads small — the step-3 endpoint / proxy rejects large bodies
-      // (HTTP 413). Low quality + a forced crop re-encodes the photo well below
-      // multi-MB. allowsEditing also lets the chef frame the document.
+      // The picker's `quality` only re-encodes JPEGs; every photo is shrunk
+      // below with compressImage so the step-3 body stays under the proxy's
+      // limit (HTTP 413). allowsEditing also lets the chef frame the document.
       const result = await (useCamera
         ? ImagePicker.launchCameraAsync({
-            quality: 0.3,
+            quality: canCompressImages() ? 0.7 : 0.3,
             allowsEditing: true,
           })
         : ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
-            quality: 0.3,
+            quality: canCompressImages() ? 0.7 : 0.3,
             allowsEditing: true,
           })
       );
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        const filename = asset.uri.split('/').pop() || 'photo.jpg';
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : `image/jpeg`;
+        const compressed = await compressImage(asset.uri, asset.width);
+        const bytes = await byteSize(compressed.uri);
+        console.log('Picked image size (KB):', Math.round(bytes / 1024));
+        if (rejectOversized(bytes)) return;
 
         const newFile = {
-          uri: asset.uri,
-          name: filename,
-          type: asset.mimeType || type
+          uri: compressed.uri,
+          name: compressed.name,
+          type: compressed.type,
         };
 
         setFileForSlot(slot, newFile);
@@ -210,30 +258,26 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
   };
 
   const handleDocumentSelection = (setter: (f: FileAsset) => void, slot: 'govId' | 'safetyCert') => {
-    Alert.alert(
-      'Upload Document',
-      'Select a source for your document',
-      [
-        { text: 'Take Photo', onPress: () => uploadImage(setter, slot, true) },
-        { text: 'Choose from Gallery', onPress: () => uploadImage(setter, slot, false) },
-        { text: 'Select PDF', onPress: () => pickDocument(setter) },
-        { text: 'Cancel', style: 'cancel' },
+    setSheet({
+      title: 'Upload Document',
+      subtitle: 'Select a source for your document',
+      options: [
+        { label: 'Take Photo', description: 'Use your camera', icon: Camera, onPress: () => uploadImage(setter, slot, true) },
+        { label: 'Choose from Gallery', description: 'JPG or PNG from your phone', icon: ImageIcon, onPress: () => uploadImage(setter, slot, false) },
+        { label: 'Select PDF', description: 'Upload a PDF document', icon: FileText, onPress: () => pickDocument(setter) },
       ],
-      { cancelable: true }
-    );
+    });
   };
 
   const handleImageSelection = (setter: (f: FileAsset) => void, slot: 'kitchenPhoto') => {
-    Alert.alert(
-      'Upload Image',
-      'Select a source for your photo',
-      [
-        { text: 'Take Photo', onPress: () => uploadImage(setter, slot, true) },
-        { text: 'Choose from Gallery', onPress: () => uploadImage(setter, slot, false) },
-        { text: 'Cancel', style: 'cancel' },
+    setSheet({
+      title: 'Upload Image',
+      subtitle: 'Select a source for your photo',
+      options: [
+        { label: 'Take Photo', description: 'Use your camera', icon: Camera, onPress: () => uploadImage(setter, slot, true) },
+        { label: 'Choose from Gallery', description: 'JPG or PNG from your phone', icon: ImageIcon, onPress: () => uploadImage(setter, slot, false) },
       ],
-      { cancelable: true }
-    );
+    });
   };
 
   const handleComplete = async () => {
@@ -278,6 +322,15 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
         getUriSize(kitchenPhoto.uri),
       ]);
       const totalBytes = sizes.reduce((a, b) => a + b, 0);
+      console.log('Step 3 upload total (KB):', Math.round(totalBytes / 1024));
+      if (totalBytes > MAX_UPLOAD_BYTES) {
+        Toast.show({
+          type: 'error',
+          text1: 'Files too large',
+          text2: `Your documents add up to ${(totalBytes / 1024 / 1024).toFixed(1)} MB (limit 1 MB). Tap a document to replace it with a smaller photo.`,
+        });
+        return;
+      }
       console.log('Step 3 upload sizes (KB):', {
         government_id: Math.round(sizes[0] / 1024),
         food_safety_cert: Math.round(sizes[1] / 1024),
@@ -348,7 +401,7 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
         if (response.status === 413) {
           throw new Error('Your photos are too large to upload. Please retake them and try again.');
         }
-        throw new Error(errorData.message || `Failed to submit Step 3 (Status: ${response.status})`);
+        throw new Error(friendlyApiError(response.status, errorData).message);
       }
 
       const data = await response.json().catch(() => ({}));
@@ -392,522 +445,226 @@ export const RegisterStep3 = ({ navigation, route }: any) => {
     }
   };
 
-  return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ChevronLeft size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.brandTitle}>GO HOMEYY</Text>
-        <View style={styles.progressRing}>
-           <View style={styles.progressInner}>
-             <Text style={styles.progressText}>100%</Text>
-           </View>
+  const goToReview = () => {
+    if (!govId || !safetyCert || !kitchenPhoto) {
+      const missing = [
+        !govId ? 'Aadhaar / Government ID' : null,
+        !safetyCert ? 'Food Safety Certificate' : null,
+        !kitchenPhoto ? 'Kitchen Photo' : null,
+      ].filter(Boolean).join(', ');
+      Toast.show({ type: 'error', text1: 'Missing Documents', text2: `Please upload: ${missing}` });
+      return;
+    }
+    setPage('review');
+  };
+
+  const previewModal = (
+    <Modal visible={previewVisible} transparent={false} animationType="slide" onRequestClose={() => setPreviewVisible(false)}>
+      <SafeAreaView style={styles.modalContainer}>
+        <StatusBar style="light" />
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Preview</Text>
+          <PressableScale onPress={() => setPreviewVisible(false)} style={styles.modalClose} pressedScale={0.9}>
+            <X size={18} color={C.white} />
+          </PressableScale>
         </View>
-      </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <View style={styles.introSection}>
-          <Text style={styles.subtitle}>STEP 3 OF 3</Text>
-          <Text style={styles.title}>Security & Verification</Text>
-          <Text style={styles.description}>
-            To maintain our high standards of safety and professional trust, please upload the following documents. These will be reviewed by our concierge team within 24 hours.
-          </Text>
+        <View style={styles.previewContainer}>
+          {pendingFile && (
+            <FadeInView fromScale={0.94} offset={0} style={styles.previewFill}>
+              <Image source={{ uri: pendingFile.uri }} style={styles.previewImage} resizeMode="contain" />
+            </FadeInView>
+          )}
         </View>
 
-        <View style={styles.uploadSection}>
-          <View style={styles.uploadCard}>
-            <View style={styles.uploadHeader}>
-              <View style={styles.uploadIconLabel}>
-                <View style={styles.iconCircle}>
-                  <FileText size={18} color={Colors.primary} />
-                </View>
-                <View>
-                  <Text style={styles.uploadTitle}>Government ID</Text>
-                  <Text style={styles.uploadSub}>Passport, License, or National ID</Text>
-                </View>
-              </View>
-              <View style={styles.requiredBadge}>
-                <Text style={styles.requiredText}>REQUIRED</Text>
-              </View>
-            </View>
-            <TouchableOpacity style={styles.uploadPlaceholder} onPress={() => handleDocumentSelection(setGovId, 'govId')}>
-              <Camera size={32} color={Colors.primary} style={{ opacity: 0.5 }} />
-              <Text style={styles.uploadLabel}>{govId ? govId.name : 'Tap to Capture or Upload'}</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.uploadCard}>
-            <View style={styles.uploadHeader}>
-              <View style={styles.uploadIconLabel}>
-                <View style={styles.iconCircle}>
-                  <CheckCircle size={18} color={Colors.primary} />
-                </View>
-                <View>
-                  <Text style={styles.uploadTitle}>Food Safety Certificate</Text>
-                  <Text style={styles.uploadSub}>FSSAI or local equivalent</Text>
-                </View>
-              </View>
-              <View style={styles.requiredBadge}>
-                <Text style={styles.requiredText}>REQUIRED</Text>
-              </View>
-            </View>
-            <TouchableOpacity style={styles.uploadPlaceholder} onPress={() => handleDocumentSelection(setSafetyCert, 'safetyCert')}>
-              <FileText size={32} color={Colors.primary} style={{ opacity: 0.5 }} />
-              <Text style={styles.uploadLabel}>{safetyCert ? safetyCert.name : 'Upload PDF or JPG'}</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.uploadCard}>
-            <View style={styles.uploadHeader}>
-              <View style={styles.uploadIconLabel}>
-                <View style={styles.iconCircle}>
-                  <Utensils size={18} color={Colors.primary} />
-                </View>
-                <View>
-                  <Text style={styles.uploadTitle}>Kitchen Photo</Text>
-                  <Text style={styles.uploadSub}>Wide shot of your primary workspace</Text>
-                </View>
-              </View>
-              <View style={styles.requiredBadge}>
-                <Text style={styles.requiredText}>REQUIRED</Text>
-              </View>
-            </View>
-            <View style={styles.kitchenPhotosRow}>
-              <View style={styles.exampleContainer}>
-                <Image source={require('../assets/images/risotto.png')} style={styles.exampleImage} />
-                <View style={styles.exampleOverlay}>
-                  <Text style={styles.exampleText}>Example</Text>
-                </View>
-              </View>
-              <TouchableOpacity style={styles.uploadYoursBtn} onPress={() => handleImageSelection(setKitchenPhoto, 'kitchenPhoto')}>
-                 {kitchenPhoto ? (
-                   <>
-                     <Image source={{ uri: kitchenPhoto.uri }} style={styles.kitchenPhotoPreview} />
-                     <View style={styles.selectedOverlay}>
-                       <CheckCircle size={14} color={Colors.background} />
-                       <Text style={styles.selectedOverlayText}>ATTACHED</Text>
-                     </View>
-                   </>
-                 ) : (
-                   <>
-                     <Camera size={24} color={Colors.primary} style={{ opacity: 0.5, marginBottom: 8 }} />
-                     <Text style={styles.uploadYoursText}>Upload Yours</Text>
-                   </>
-                 )}
-              </TouchableOpacity>
-            </View>
+        <View style={styles.modalFooter}>
+          <PressableScale style={styles.retakeBtn} onPress={handleRetake}>
+            <RefreshCw size={18} color={C.primary} />
+            <Text style={styles.retakeBtnText}>Retake</Text>
+          </PressableScale>
+          <View style={{ flex: 2 }}>
+            <PrimaryButton label="Use photo" onPress={handleDone} showChevron={false} />
           </View>
         </View>
+      </SafeAreaView>
+    </Modal>
+  );
 
-        <View style={styles.noteBox}>
-          <View style={styles.noteHeader}>
-            <Info size={16} color={Colors.primary} />
-            <Text style={styles.noteTitle}>CHEF'S NOTE</Text>
-          </View>
-          <Text style={styles.noteText}>
-            Ensure all text on documents is clearly legible. High-quality kitchen photos improve your profile ranking by 40%.
-          </Text>
-        </View>
-
-        <View style={styles.footer}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.prevBtn}>
-            <Text style={styles.prevBtnText}>PREVIOUS</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.completeBtn, loading && { opacity: 0.7 }]}
-            onPress={handleComplete}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={Colors.background} size="small" />
-            ) : (
-              <>
-                <CheckCircle size={20} color={Colors.background} style={styles.btnIcon} />
-                <Text style={styles.completeBtnText}>COMPLETE REGISTRATION</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      <Modal
-        visible={previewVisible}
-        transparent={false}
-        animationType="slide"
+  if (page === 'review') {
+    const rows: { label: string; done: boolean }[] = [
+      { label: 'Basic information', done: true },
+      { label: 'Kitchen details', done: true },
+      { label: 'Aadhaar / Government ID', done: !!govId },
+      { label: 'Food certificate', done: !!safetyCert },
+      { label: 'Kitchen photo', done: !!kitchenPhoto },
+    ];
+    return (
+      <OnboardingLayout
+        onBack={() => setPage('documents')}
+        progress={REG_PROGRESS.review}
+        progressFrom={REG_PROGRESS.documents}
+        footer={<PrimaryButton label="Save & continue" onPress={handleComplete} loading={loading} />}
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>PREVIEW</Text>
-            <TouchableOpacity onPress={() => setPreviewVisible(false)}>
-              <X size={24} color={Colors.text} />
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.previewContainer}>
-            {pendingFile && (
-              <Image 
-                source={{ uri: pendingFile.uri }} 
-                style={styles.previewImage} 
-                resizeMode="contain"
-              />
-            )}
-          </View>
+        <FadeInView style={styles.reviewTitle}>
+          <Text style={T.screenTitle}>Document Review / Checklist</Text>
+        </FadeInView>
+        <FadeInView delay={80} style={styles.checklist}>
+          {rows.map((row, i) => (
+            <FadeInView
+              key={row.label}
+              delay={140 + i * 70}
+              offset={8}
+              style={[styles.checkRow, i < rows.length - 1 && styles.checkRowDivider]}
+            >
+              <CircleCheck size={20} color={row.done ? C.successDeep : C.warning} strokeWidth={1.67} />
+              <Text style={styles.checkLabel}>{row.label}</Text>
+              <StatusBadge label={row.done ? 'Added' : 'Missing'} tone={row.done ? 'success' : 'warning'} />
+            </FadeInView>
+          ))}
+        </FadeInView>
+        <FadeInView delay={520}>
+          <Text style={[T.subtitle, styles.reviewNote]}>
+            Our team reviews your documents within 24 hours. You'll see the status as soon as you're signed in.
+          </Text>
+        </FadeInView>
+      </OnboardingLayout>
+    );
+  }
 
-          <View style={styles.modalFooter}>
-            <TouchableOpacity style={styles.retakeBtn} onPress={handleRetake}>
-              <RefreshCw size={20} color={Colors.primary} style={{ marginRight: 8 }} />
-              <Text style={styles.retakeBtnText}>RETAKE</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.doneBtn} onPress={handleDone}>
-              <CheckCircle size={20} color={Colors.background} style={{ marginRight: 8 }} />
-              <Text style={styles.doneBtnText}>DONE</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </Modal>
-    </SafeAreaView>
+  const uploads: { title: string; file: FileAsset | null; onPress: () => void }[] = [
+    { title: 'Aadhaar Document Upload', file: govId, onPress: () => handleDocumentSelection(setGovId, 'govId') },
+    { title: 'Certificate Upload', file: safetyCert, onPress: () => handleDocumentSelection(setSafetyCert, 'safetyCert') },
+    { title: 'Kitchen Photo Upload', file: kitchenPhoto, onPress: () => handleImageSelection(setKitchenPhoto, 'kitchenPhoto') },
+  ];
+
+  return (
+    <>
+      <OnboardingLayout
+        onBack={() => navigation.goBack()}
+        progress={REG_PROGRESS.documents}
+        progressFrom={REG_PROGRESS.location}
+        footer={<PrimaryButton label="Continue" onPress={goToReview} />}
+      >
+        {uploads.map((u, i) => (
+          <FadeInView key={u.title} delay={i * 90} style={styles.uploadBlock}>
+            <View style={styles.uploadHead}>
+              <Text style={T.screenTitle}>{u.title}</Text>
+              <Text style={T.subtitle}>Required for verification</Text>
+            </View>
+            <UploadTile file={u.file} onPress={u.onPress} />
+          </FadeInView>
+        ))}
+      </OnboardingLayout>
+      {previewModal}
+      <ActionSheet
+        visible={sheetVisible}
+        title={sheet?.title ?? ''}
+        subtitle={sheet?.subtitle}
+        options={sheet?.options ?? []}
+        onClose={() => setSheetVisible(false)}
+      />
+    </>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
+  uploadBlock: {
+    gap: 8,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+  uploadHead: {
+    gap: 4,
   },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandTitle: {
-    ...Typography.body,
-    fontWeight: 'bold',
-    letterSpacing: 4,
-    color: Colors.text,
-  },
-  progressRing: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 2,
-  },
-  progressInner: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 22,
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressText: {
-    color: Colors.primary,
-    fontWeight: 'bold',
-    fontSize: 10,
-  },
-  container: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: Spacing.lg,
-    paddingBottom: 40,
-  },
-  introSection: {
-    marginBottom: 32,
-  },
-  subtitle: {
-    color: Colors.primary,
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 2,
+  reviewTitle: {
+    marginTop: 16,
     marginBottom: 8,
   },
-  title: {
-    ...Typography.h1,
-    fontSize: 28,
-    marginBottom: 12,
-  },
-  description: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    lineHeight: 20,
-  },
-  uploadSection: {
-    marginBottom: 32,
-  },
-  uploadCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 24,
-    padding: 16,
-    marginBottom: 16,
+  checklist: {
+    backgroundColor: C.surface,
+    borderRadius: Radius.tile,
     borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  uploadHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  uploadIconLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  uploadTitle: {
-    color: Colors.text,
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  uploadSub: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-  },
-  requiredBadge: {
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  requiredText: {
-    color: Colors.primary,
-    fontSize: 8,
-    fontWeight: 'bold',
-  },
-  uploadPlaceholder: {
-    height: 120,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  uploadLabel: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    marginTop: 8,
-  },
-  kitchenPhotosRow: {
-    flexDirection: 'row',
-  },
-  exampleContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginRight: 12,
-  },
-  exampleImage: {
-    width: '100%',
-    height: '100%',
-    opacity: 0.6,
-  },
-  exampleOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 2,
-    alignItems: 'center',
-  },
-  exampleText: {
-    color: Colors.text,
-    fontSize: 10,
-  },
-  uploadYoursBtn: {
-    flex: 1,
-    height: 100,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  kitchenPhotoPreview: {
-    width: '100%',
-    height: '100%',
-  },
-  selectedOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(74, 222, 128, 0.9)',
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectedOverlayText: {
-    color: Colors.background,
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginLeft: 4,
-    letterSpacing: 0.5,
-  },
-  uploadYoursText: {
-    color: Colors.textSecondary,
-    fontSize: 10,
-  },
-  noteBox: {
-    backgroundColor: 'rgba(34, 211, 238, 0.05)',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(34, 211, 238, 0.1)',
-    marginBottom: 40,
-  },
-  noteHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  noteTitle: {
-    color: Colors.cyan,
-    fontWeight: 'bold',
-    fontSize: 12,
-    marginLeft: 8,
-    letterSpacing: 1,
-  },
-  noteText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    lineHeight: 18,
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  prevBtn: {
-    paddingVertical: 12,
+    borderColor: C.border,
     paddingHorizontal: 16,
+    paddingVertical: 4,
   },
-  prevBtnText: {
-    color: Colors.textSecondary,
-    fontWeight: 'bold',
-    fontSize: 12,
-    letterSpacing: 1,
-  },
-  completeBtn: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 16,
+  checkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  checkRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  checkLabel: {
     flex: 1,
-    marginLeft: 12,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  completeBtnText: {
-    color: Colors.background,
-    fontWeight: 'bold',
+    fontFamily: F.jakartaBold,
     fontSize: 12,
-    letterSpacing: 0.5,
+    lineHeight: 18,
+    color: C.textStrong,
   },
-  btnIcon: {
-    marginRight: 8,
+  reviewNote: {
+    marginTop: 8,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#0E0E10',
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Spacing.lg,
-    borderBottomWidth:1,
-    borderBottomColor: Colors.border,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
   modalTitle: {
-    ...Typography.body,
-    fontWeight: 'bold',
-    letterSpacing: 2,
-    color: Colors.textSecondary,
+    ...T.headerTitle,
+    color: C.white,
+  },
+  modalClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   previewContainer: {
     flex: 1,
-    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  previewFill: {
+    width: '100%',
+    height: '100%',
+  },
   previewImage: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height * 0.7,
+    width: '100%',
+    height: '100%',
   },
   modalFooter: {
     flexDirection: 'row',
-    padding: Spacing.xl,
-    paddingBottom: 40,
-    backgroundColor: Colors.surface,
+    gap: 12,
+    padding: 20,
+    paddingBottom: 32,
+    backgroundColor: C.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    ...Shadows.card,
   },
   retakeBtn: {
     flex: 1,
-    height: 60,
-    borderRadius: 16,
+    height: 52,
+    borderRadius: Radius.button,
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: C.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    gap: 8,
   },
   retakeBtnText: {
-    color: Colors.primary,
-    fontWeight: 'bold',
-  },
-  doneBtn: {
-    flex: 2,
-    height: 60,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  doneBtnText: {
-    color: Colors.background,
-    fontWeight: 'bold',
+    ...T.button,
+    color: C.primary,
   },
 });

@@ -1,205 +1,102 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { Colors, Spacing, Typography } from '../theme';
-import { ChefTip } from '../components/ChefTip';
-import { StatusModal } from '../components/StatusModal';
-import { Plus, Minus, Camera, Image as ImageIcon } from 'lucide-react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
+import { Boxes, Camera, Check, Image as ImageIcon, IndianRupee, Package, Trash2 } from 'lucide-react-native';
+import Toast from 'react-native-toast-message';
+import { C, F, Radius } from '../theme';
+import { ActionSheet, Chip, FadeInView, FormField, KitchenHeader, PressableScale, PrimaryButton, UploadTile } from '../components/ui';
+import type { PickedFile } from '../components/ui';
+import { FeeBreakdown } from '../components/MealFormParts';
 import { useAuth } from '../context/AuthContext';
 import { getRequiredPrice, isPriceAboveLimit, MAX_PRICE } from '../utils/price';
+import { compressImage } from '../utils/compressImage';
+import { friendlyApiError } from '../utils/apiErrors';
+import { resolveBackendMediaUrl } from '../utils/media';
+import { platformFee } from '../utils/meals';
+import type { PantryItem } from './PantryScreen';
+import { KeyboardAware } from '../components/ui/KeyboardAware';
 
-type RouteParams = {
-  AddPantryItem: {
-    item?: {
-      id: string;
-      name: string;
-      category: string;
-      price: number;
-      inventory: number;
-      image_url?: string;
-    };
-  };
-};
+type UnitType = 'ITEM' | 'CONTAINER';
 
-const CATEGORIES = ['Vegetables', 'Spices', 'Dairy', 'Grains', 'Meat', 'Other'];
-const isLocalFileUri = (uri?: string | null) => typeof uri === 'string' && uri.startsWith('file://');
+/** Backend limit for pieces_per_unit. */
+const MAX_PIECES = 100;
 
-const getImageFile = (uri: string) => {
-  const filename = uri.split('/').pop() || `pantry_${Date.now()}.jpg`;
-  const extension = /\.(\w+)$/.exec(filename)?.[1]?.toLowerCase();
-  const type = extension ? `image/${extension === 'jpg' ? 'jpeg' : extension}` : 'image/jpeg';
+const UNIT_OPTIONS: { key: UnitType; title: string; sub: string; Icon: typeof Package }[] = [
+  { key: 'ITEM', title: 'Each item', sub: 'Price per piece', Icon: Package },
+  { key: 'CONTAINER', title: 'Container', sub: 'Price per pack', Icon: Boxes },
+];
 
-  return {
-    uri,
-    name: filename,
-    type,
-  };
-};
+// Figma chips (76:14206); any other category can be typed in the field above them.
+const CATEGORIES = ['Indian', 'Asian', 'Continental', 'Healthy', 'Comfort Food', 'Desserts'];
 
-const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
-
-const buildPantryCurl = (
-  url: string,
-  method: string,
-  token: string | null | undefined,
-  values: {
-    name: string;
-    category: string;
-    price: number;
-    inventory: number;
-    image?: ReturnType<typeof getImageFile> | null;
-    imageUrl?: string | null;
-  }
-) => {
-  const base = [
-    `curl -X ${method}`,
-    shellQuote(url),
-    "-H 'Accept: application/json'",
-    token ? `-H ${shellQuote(`Authorization: Bearer ${token}`)}` : '',
-  ];
-
-  if (values.image) {
-    return [
-      ...base,
-      `-F ${shellQuote(`name=${values.name}`)}`,
-      `-F ${shellQuote(`category=${values.category}`)}`,
-      `-F ${shellQuote(`price=${values.price}`)}`,
-      `-F ${shellQuote(`inventory=${values.inventory}`)}`,
-      `-F ${shellQuote(`image=@${values.image.uri};filename=${values.image.name};type=${values.image.type}`)}`,
-    ].filter(Boolean).join(' \\\n  ');
-  }
-
-  const jsonBody: Record<string, any> = {
-    name: values.name,
-    category: values.category,
-    price: values.price,
-    inventory: values.inventory,
-  };
-
-  if (values.imageUrl) {
-    jsonBody.image_url = values.imageUrl;
-  }
-
-  return [
-    ...base,
-    "-H 'Content-Type: application/json'",
-    `--data ${shellQuote(JSON.stringify(jsonBody))}`,
-  ].filter(Boolean).join(' \\\n  ');
-};
-
-const logPantryCurl = (
-  url: string,
-  method: string,
-  token: string | null | undefined,
-  values: Parameters<typeof buildPantryCurl>[3]
-) => {
-  const curl = buildPantryCurl(url, method, token, values);
-  console.log('========== PANTRY CURL START ==========');
-  curl.split('\n').forEach((line) => console.log(line));
-  console.log('========== PANTRY CURL END ==========');
-};
-
+/** Add / edit pantry item (Figma "New pANTRY mneu" 76:14162 and "Edit pantry mneu" 76:14400). */
 export const AddPantryItemScreen = () => {
-  const navigation = useNavigation();
-  const route = useRoute<RouteProp<RouteParams, 'AddPantryItem'>>();
-  const { token } = useAuth();
-
-  const editItem = route.params?.item;
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const { token, user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const editItem: PantryItem | undefined = route.params?.item;
   const isEditing = !!editItem;
 
   const [name, setName] = useState(editItem?.name || '');
   const [category, setCategory] = useState(editItem?.category || '');
   const [price, setPrice] = useState(editItem?.price?.toString() || '');
-  const [inventory, setInventory] = useState(editItem?.inventory ?? 10);
-  const [image, setImage] = useState<string | null>(editItem?.image_url || null);
+  const [inventory, setInventory] = useState(String(editItem?.inventory ?? 10));
+  const [unitType, setUnitType] = useState<UnitType>(String(editItem?.unit_type).toUpperCase() === 'CONTAINER' ? 'CONTAINER' : 'ITEM');
+  const [piecesPerUnit, setPiecesPerUnit] = useState(editItem?.pieces_per_unit ? String(editItem.pieces_per_unit) : '');
+  const [image, setImage] = useState<PickedFile | null>(null);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [photoSheet, setPhotoSheet] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   const parsedPrice = getRequiredPrice(price);
+  const isContainer = unitType === 'CONTAINER';
+  const scrollRef = useRef<ScrollView>(null);
+  // Keep the last fields visible above the keyboard once it has opened.
+  const revealBottom = () => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 250);
+  const pieceCount = parseInt(piecesPerUnit, 10) || 0;
   const priceAboveLimit = isPriceAboveLimit(price);
+  const existingImage = editItem?.image_url || null;
 
-  const [modalConfig, setModalConfig] = useState<{
-    visible: boolean;
-    type: 'success' | 'error';
-    title: string;
-    message: string;
-    onClose: () => void;
-  }>({
-    visible: false,
-    type: 'success',
-    title: '',
-    message: '',
-    onClose: () => {},
-  });
-
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      setModalConfig({
-        visible: true,
-        type: 'error',
-        title: 'Permission Denied',
-        message: 'We need photo library permissions to upload images.',
-        onClose: () => setModalConfig(prev => ({ ...prev, visible: false })),
-      });
+  const pick = async (useCamera: boolean) => {
+    const perm = useCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm.status !== 'granted') {
+      Toast.show({ type: 'error', text1: 'Permission Denied', text2: useCamera ? 'Camera access is needed to take a photo.' : 'Photo access is needed to upload an image.' });
       return;
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.3,
-    });
-
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
-    }
-  };
-
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      setModalConfig({
-        visible: true,
-        type: 'error',
-        title: 'Permission Denied',
-        message: 'We need camera permissions to capture photos.',
-        onClose: () => setModalConfig(prev => ({ ...prev, visible: false })),
-      });
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.3,
-    });
-
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
+    const opts = { allowsEditing: true, aspect: [4, 3] as [number, number], quality: 0.7 };
+    const result = useCamera
+      ? await ImagePicker.launchCameraAsync(opts)
+      : await ImagePicker.launchImageLibraryAsync({ ...opts, mediaTypes: ['images'] });
+    if (!result.canceled && result.assets?.length) {
+      const asset = result.assets[0];
+      setImage(await compressImage(asset.uri, asset.width));
     }
   };
 
   const handleSubmit = async () => {
-    if (!name || !category || parsedPrice === null) {
-      setModalConfig({
-        visible: true,
+    const units = parseInt(inventory, 10);
+    if (!name.trim() || !category.trim() || parsedPrice === null) {
+      Toast.show({
         type: 'error',
-        title: 'Missing Details',
-        message: 'Please fill in item name, category, and a valid price.',
-        onClose: () => setModalConfig(prev => ({ ...prev, visible: false })),
+        text1: 'Missing Details',
+        text2: priceAboveLimit ? `Price can't be more than ₹${MAX_PRICE}.` : 'Please add a name, category and a valid price.',
       });
+      return;
+    }
+    if (isNaN(units) || units < 0) {
+      Toast.show({ type: 'error', text1: 'Available units', text2: 'Enter how many units you have in stock.' });
+      return;
+    }
+    const pieces = parseInt(piecesPerUnit, 10);
+    if (unitType === 'CONTAINER' && (isNaN(pieces) || pieces < 1 || pieces > MAX_PIECES)) {
+      Toast.show({ type: 'error', text1: 'Pieces per container', text2: `Enter between 1 and ${MAX_PIECES} pieces per container.` });
       return;
     }
 
@@ -208,457 +105,318 @@ export const AddPantryItemScreen = () => {
       const url = isEditing
         ? `${process.env.EXPO_PUBLIC_API_URL}pantry/${editItem!.id}`
         : `${process.env.EXPO_PUBLIC_API_URL}pantry`;
+      const method = isEditing ? 'PATCH' : 'POST';
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
 
-      const imageFile = image && isLocalFileUri(image) ? getImageFile(image) : null;
-
-      const headers: Record<string, string> = {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
+      // Pantry unit fields (new). Sent with every save; if the server does not
+      // accept them yet, the save is retried without them so it never blocks.
+      const unitFields: Record<string, string | number> = {
+        unit_type: unitType,
+        pieces_per_unit: unitType === 'CONTAINER' ? pieces : 1,
       };
 
-      let body: BodyInit;
-      if (imageFile) {
-        const formData = new FormData();
-        formData.append('name', name);
-        formData.append('category', category);
-        formData.append('price', String(parsedPrice));
-        formData.append('inventory', String(inventory));
-        formData.append('image', imageFile as any);
-        body = formData;
-      } else {
-        headers['Content-Type'] = 'application/json';
-
-        const jsonBody: Record<string, any> = {
-          name,
-          category,
+      const send = async (withUnits: boolean) => {
+        const fields: Record<string, string | number> = {
+          name: name.trim(),
+          category: category.trim(),
           price: parsedPrice,
-          inventory,
+          inventory: units,
+          ...(withUnits ? unitFields : {}),
         };
-
+        const reqHeaders = { ...headers };
+        let body: BodyInit;
+        // Multipart only when a new photo was picked; otherwise JSON (same as before).
         if (image) {
-          jsonBody.image_url = image;
+          const formData = new FormData();
+          Object.entries(fields).forEach(([k, v]) => formData.append(k, String(v)));
+          formData.append('image', { uri: image.uri, name: image.name, type: image.type } as any);
+          body = formData;
+        } else {
+          reqHeaders['Content-Type'] = 'application/json';
+          body = JSON.stringify(existingImage ? { ...fields, image_url: existingImage } : fields);
         }
+        console.log('Pantry API Request:', method, url, fields);
+        const res = await fetch(url, { method, headers: reqHeaders, credentials: 'include', body });
+        const json = await res.json().catch(() => ({}));
+        console.log('Pantry API Response:', res.status, JSON.stringify(json, null, 2));
+        return { res, json };
+      };
 
-        body = JSON.stringify(jsonBody);
+      let { res: response, json: result } = await send(true);
+      // Only for a server that predates container support (field rejected as
+      // unknown). Real validation errors (e.g. "pieces_per_unit must be at most
+      // 100") must reach the chef, not be silently retried as a single item.
+      const rejectedUnitFields =
+        (response.status === 400 || response.status === 422) &&
+        /(unit_type|pieces_per_unit)[^"]*(should not exist|not allowed|unknown|unrecognized)/i.test(JSON.stringify(result));
+      if (rejectedUnitFields) {
+        ({ res: response, json: result } = await send(false));
+        if (response.ok && unitType === 'CONTAINER') {
+          Toast.show({ type: 'info', text1: 'Saved without pack size', text2: 'Container details will show once the server supports them.' });
+        }
       }
 
-      const method = isEditing ? 'PATCH' : 'POST';
-      console.log('========== PANTRY REQUEST START ==========');
-      console.log('Pantry API Request:', {
-        method,
-        url,
-        auth: token ? 'Bearer token attached' : 'No token',
-        contentType: imageFile ? 'multipart/form-data (boundary set by React Native)' : headers['Content-Type'],
-        body: imageFile
-          ? {
-              name,
-              category,
-              price: parsedPrice,
-              inventory,
-              image: imageFile,
-            }
-          : JSON.parse(body as string),
-      });
-      logPantryCurl(url, method, token, {
-        name,
-        category,
-        price: parsedPrice,
-        inventory,
-        image: imageFile,
-        imageUrl: !imageFile ? image : null,
-      });
-      console.log('========== PANTRY REQUEST END ==========');
-
-      const response = await fetch(url, {
-        method,
-        headers,
-        credentials: 'include',
-        body,
-      });
-
-      console.log('========== PANTRY RESPONSE START ==========');
-      console.log('Pantry API Response Status:', response.status);
-      const result = await response.json();
-      console.log('Pantry API Response Body:', JSON.stringify(result, null, 2));
-      console.log('========== PANTRY RESPONSE END ==========');
-
-      if (response.ok) {
-        setModalConfig({
-          visible: true,
-          type: 'success',
-          title: isEditing ? 'Item Updated!' : 'Item Added!',
-          message: isEditing
-            ? 'Your pantry item has been updated successfully.'
-            : 'New item has been added to your pantry.',
-          onClose: () => {
-            setModalConfig(prev => ({ ...prev, visible: false }));
-            navigation.goBack();
-          },
-        });
+      if (!response.ok) {
+        // Backend pantry validation (400) and the unit_type lock (409) send
+        // chef-readable messages — show them as-is.
+        const serverMessage = typeof result?.message === 'string' ? result.message : undefined;
+        const message =
+          (response.status === 400 || response.status === 409) && serverMessage
+            ? serverMessage
+            : friendlyApiError(response.status, result, `Could not ${isEditing ? 'update' : 'add'} this item.`).message;
+        Toast.show({ type: 'error', text1: isEditing ? 'Update failed' : 'Publishing failed', text2: message });
+        return;
+      }
+      if (isEditing) {
+        Toast.show({ type: 'success', text1: 'Item updated', text2: `${name.trim()} has been saved.` });
+        navigation.goBack();
       } else {
-        throw new Error(result.message || `Failed to ${isEditing ? 'update' : 'create'} item`);
+        navigation.replace('Success', { kind: 'pantry' });
       }
-    } catch (error: any) {
-      setModalConfig({
-        visible: true,
-        type: 'error',
-        title: isEditing ? 'Update Failed' : 'Creation Failed',
-        message: error.message || 'Something went wrong. Please try again.',
-        onClose: () => setModalConfig(prev => ({ ...prev, visible: false })),
-      });
+    } catch {
+      Toast.show({ type: 'error', text1: 'Network error', text2: 'Please check your connection and try again.' });
     } finally {
       setLoading(false);
     }
   };
 
+  const performDelete = async () => {
+    if (!editItem) return;
+    setDeleting(true);
+    try {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}pantry/${editItem.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        console.log('Pantry delete error:', response.status, await response.text());
+        throw new Error();
+      }
+      Toast.show({ type: 'success', text1: 'Item removed', text2: `${editItem.name} is no longer in your pantry.` });
+      navigation.goBack();
+    } catch {
+      Toast.show({ type: 'error', text1: 'Delete failed', text2: 'Could not remove the item. Please try again.' });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <StatusModal
-          visible={modalConfig.visible}
-          type={modalConfig.type}
-          title={modalConfig.title}
-          message={modalConfig.message}
-          onClose={modalConfig.onClose}
+    <View style={styles.root}>
+      <StatusBar style="dark" />
+      <View style={{ paddingTop: insets.top }}>
+        <KitchenHeader
+          kitchenName={isEditing ? 'Edit Item' : 'Add New Item'}
+          subtitle="GoHomeyy Chef"
+          ownerName={user?.name}
+          onBack={() => navigation.goBack()}
+          onWallet={() => navigation.navigate('Wallet')}
+          onProfile={() => navigation.navigate('Profile')}
         />
+      </View>
 
-        {/* Header Section */}
-        <View style={styles.headerSection}>
-          <Text style={styles.headerTitle}>
-            {isEditing ? 'Edit Pantry Item' : 'Add New Item'}
-          </Text>
-          <Text style={styles.headerSubtitle}>
-            {isEditing
-              ? 'Update the details for this pantry item.'
-              : 'Stock up your kitchen with essential ingredients.'}
-          </Text>
-        </View>
+      {/* Edge-to-edge Android doesn't resize the window for the keyboard, so pad on both platforms. */}
+      <KeyboardAware style={styles.flex}>
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <FadeInView>
+            <UploadTile tone="cream" icon="coral" file={image} previewUri={resolveBackendMediaUrl(existingImage)} onPress={() => setPhotoSheet(true)} />
+          </FadeInView>
 
-        {/* Image Upload */}
-        <View style={styles.imageOptionsRow}>
-          <TouchableOpacity
-            style={[styles.imageUploadHalf, image ? styles.imageUploadWithPreview : null]}
-            onPress={takePhoto}
-          >
-            {image ? (
-              <Image source={{ uri: image }} style={styles.previewImage} />
-            ) : (
-              <View style={styles.uploadPlaceholderCompact}>
-                <Camera size={20} color={Colors.primary} />
-                <Text style={styles.uploadTitleCompact}>Take Photo</Text>
+          <View style={styles.fields}>
+            <FadeInView delay={60}>
+              <FormField label="Name" value={name} onChangeText={setName} placeholder="e.g. Mango Pickle" autoCapitalize="words" />
+            </FadeInView>
+
+            <FadeInView delay={100} style={styles.categoryBlock}>
+              <View style={styles.categoryBox}>
+                <TextInput
+                  value={category}
+                  onChangeText={setCategory}
+                  placeholder="Enter Category"
+                  placeholderTextColor={C.textStrong}
+                  style={styles.categoryInput}
+                  autoCapitalize="words"
+                />
               </View>
+              <View style={styles.chips}>
+                {CATEGORIES.map((c) => (
+                  <Chip key={c} label={c} selected={category.trim().toLowerCase() === c.toLowerCase()} onPress={() => setCategory(c)} />
+                ))}
+              </View>
+            </FadeInView>
+
+            {/* 1. How is it sold? Everything below adapts to this choice. */}
+            <FadeInView delay={140} style={styles.unitsWrap}>
+              <Text style={styles.label}>Sold as</Text>
+              <View style={styles.segment}>
+                {UNIT_OPTIONS.map((o) => {
+                  const active = unitType === o.key;
+                  return (
+                    <PressableScale key={o.key} style={[styles.segmentItem, active && styles.segmentActive]} onPress={() => setUnitType(o.key)} pressedScale={0.97}>
+                      <View style={[styles.segmentIcon, active && styles.segmentIconActive]}>
+                        <o.Icon size={18} color={active ? C.white : C.textMuted} strokeWidth={1.67} />
+                      </View>
+                      <Text style={[styles.segmentTitle, active && { color: C.primary }]}>{o.title}</Text>
+                      <Text style={styles.segmentSub}>{o.sub}</Text>
+                      {active && (
+                        <View style={styles.segmentCheck}>
+                          <Check size={10} color={C.white} strokeWidth={3} />
+                        </View>
+                      )}
+                    </PressableScale>
+                  );
+                })}
+              </View>
+            </FadeInView>
+
+            {/* 2. Container size (container only). */}
+            {isContainer && (
+              <FadeInView offset={8} style={styles.unitsWrap}>
+                <FormField
+                  label="Pieces in one container"
+                  value={piecesPerUnit}
+                  onChangeText={(v) => setPiecesPerUnit(v.replace(/\D/g, '').slice(0, 3))}
+                  keyboardType="number-pad"
+                  placeholder="e.g. 6"
+                  icon={<Boxes size={16} color={C.iconMuted} strokeWidth={1.33} />}
+                  right={<Text style={styles.unit}>pieces</Text>}
+                />
+              </FadeInView>
             )}
-            {image && (
-              <TouchableOpacity style={styles.changeImageBtn} onPress={() => setImage(null)}>
-                <Text style={styles.changeImageText}>Remove</Text>
-              </TouchableOpacity>
+
+            {/* 3. Price — per item, or total for the whole container. */}
+            <FadeInView delay={180}>
+              <FormField
+                label={isContainer ? 'Total price per container' : 'Price per item'}
+                value={price}
+                onChangeText={(v) => setPrice(v.replace(/[^\d.]/g, ''))}
+                placeholder={isContainer ? 'e.g. 220 for the whole container' : 'e.g. 40'}
+                keyboardType="numeric"
+                icon={<IndianRupee size={16} color={C.iconMuted} strokeWidth={1.33} />}
+                right={<Text style={styles.unit}>{isContainer ? '/ container' : '/ item'}</Text>}
+              />
+              {priceAboveLimit && <Text style={styles.error}>Price can't be more than ₹{MAX_PRICE}.</Text>}
+            </FadeInView>
+
+            {isContainer && !!parsedPrice && pieceCount > 0 && (
+              <FadeInView offset={6} style={styles.summary}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{pieceCount}</Text>
+                  <Text style={styles.summaryLabel}>pieces / container</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>₹{parsedPrice}</Text>
+                  <Text style={styles.summaryLabel}>per container</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>₹{(parsedPrice / pieceCount).toFixed(2)}</Text>
+                  <Text style={styles.summaryLabel}>per piece</Text>
+                </View>
+              </FadeInView>
             )}
-          </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.imageUploadHalf, !image ? null : { display: 'none' }]}
-            onPress={pickImage}
-          >
-            <View style={styles.uploadPlaceholderCompact}>
-              <ImageIcon size={20} color={Colors.primary} />
-              <Text style={styles.uploadTitleCompact}>Gallery</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+            <FadeInView delay={200} style={styles.feeWrap}>
+              <FeeBreakdown price={parsedPrice ?? 0} fee={platformFee(user)} />
+            </FadeInView>
 
-        {!image && (
-          <Text style={styles.imageHint}>High-res JPEG or PNG preferred (Max 5MB)</Text>
-        )}
+            {/* 4. Stock, counted in sellable units. */}
+            <FadeInView delay={220} style={styles.unitsWrap}>
+              <FormField
+                label={isContainer ? 'Containers in stock' : 'Items in stock'}
+                value={inventory}
+                onChangeText={(v) => setInventory(v.replace(/\D/g, ''))}
+                keyboardType="number-pad"
+                placeholder="10"
+                selectTextOnFocus
+                onFocus={revealBottom}
+                right={<Text style={styles.unit}>{isContainer ? 'containers' : 'items'}</Text>}
+              />
+            </FadeInView>
 
-        {/* Item Name */}
-        <View style={styles.inputSection}>
-          <Text style={styles.label}>ITEM NAME</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Basmati Rice, Turmeric Powder"
-            placeholderTextColor={Colors.textSecondary}
-            value={name}
-            onChangeText={setName}
-          />
-        </View>
-
-        {/* Category Selection */}
-        <View style={styles.inputSection}>
-          <Text style={styles.label}>CATEGORY</Text>
-          <View style={styles.categoryGrid}>
-            {CATEGORIES.map(cat => (
-              <TouchableOpacity
-                key={cat}
-                style={[styles.categoryBtn, category === cat && styles.activeCategoryBtn]}
-                onPress={() => setCategory(cat)}
-              >
-                <Text style={[styles.categoryBtnText, category === cat && styles.activeCategoryBtnText]}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {isEditing && (
+              <FadeInView delay={260}>
+                <PressableScale style={styles.remove} onPress={() => setConfirmDelete(true)} disabled={deleting}>
+                  <Trash2 size={15} color={C.danger} />
+                  <Text style={styles.removeText}>{deleting ? 'Removing…' : 'Remove item'}</Text>
+                </PressableScale>
+              </FadeInView>
+            )}
           </View>
+        </ScrollView>
+
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+          <PrimaryButton label={isEditing ? 'Save' : 'Publish'} onPress={handleSubmit} loading={loading} />
         </View>
+      </KeyboardAware>
 
-        {/* Price */}
-        <View style={styles.inputSection}>
-          <Text style={styles.label}>PRICE PER UNIT</Text>
-          <View style={styles.priceInputContainer}>
-            <Text style={styles.currency}>₹</Text>
-            <TextInput
-              style={styles.priceInput}
-              keyboardType="numeric"
-              placeholder="0.00"
-              placeholderTextColor={Colors.textSecondary}
-              value={price}
-              onChangeText={setPrice}
-            />
-          </View>
-          {priceAboveLimit ? (
-            <Text style={styles.errorHint}>Price cannot exceed ₹{MAX_PRICE.toLocaleString('en-IN')}.</Text>
-          ) : null}
-        </View>
-
-        {/* Inventory */}
-        <View style={styles.inputSection}>
-          <Text style={styles.label}>INVENTORY COUNT</Text>
-          <View style={styles.stepper}>
-            <TouchableOpacity
-              style={styles.stepperBtn}
-              onPress={() => setInventory(Math.max(0, inventory - 1))}
-            >
-              <Minus size={20} color={Colors.primary} />
-            </TouchableOpacity>
-            <Text style={styles.inventoryText}>{inventory} units</Text>
-            <TouchableOpacity
-              style={styles.stepperBtn}
-              onPress={() => setInventory(inventory + 1)}
-            >
-              <Plus size={20} color={Colors.primary} />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.hint}>Total quantity available in stock</Text>
-        </View>
-
-        <ChefTip tip="Keep your pantry organized by category. This helps you quickly find what you need during busy service hours!" />
-
-        {/* Submit Button */}
-        <TouchableOpacity
-          style={[styles.submitBtn, (loading || parsedPrice === null) && styles.submitBtnDisabled]}
-          onPress={handleSubmit}
-          disabled={loading || parsedPrice === null}
-        >
-          {loading ? (
-            <ActivityIndicator color={Colors.background} size="small" />
-          ) : (
-            <Text style={styles.submitBtnText}>
-              {isEditing ? 'Update Item' : 'Add to Pantry'}
-            </Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      <ActionSheet
+        visible={photoSheet}
+        title="Item photo"
+        subtitle="Add a clear photo of the product"
+        options={[
+          { label: 'Take Photo', description: 'Use your camera', icon: Camera, onPress: () => pick(true) },
+          { label: 'Choose from Gallery', description: 'JPG or PNG from your phone', icon: ImageIcon, onPress: () => pick(false) },
+        ]}
+        onClose={() => setPhotoSheet(false)}
+      />
+      <ActionSheet
+        visible={confirmDelete}
+        title="Remove this item?"
+        subtitle="Customers won't be able to order it any more."
+        options={[{ label: 'Yes, remove item', description: editItem?.name, icon: Trash2, onPress: performDelete }]}
+        onClose={() => setConfirmDelete(false)}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollView: {
-    backgroundColor: Colors.background,
-  },
-  scrollContent: {
-    padding: Spacing.md,
-    paddingBottom: 40,
-  },
-  headerSection: {
-    marginBottom: Spacing.xl,
-    paddingTop: Spacing.sm,
-  },
-  headerTitle: {
-    ...Typography.h1,
-    fontSize: 28,
-    marginBottom: 8,
-  },
-  headerSubtitle: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    lineHeight: 20,
-  },
-  imageOptionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: Spacing.sm,
-  },
-  imageUploadHalf: {
-    flex: 1,
-    height: 120,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
+  root: { flex: 1, backgroundColor: C.bg },
+  flex: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 1, paddingBottom: 32, gap: 15 },
+  fields: { gap: 12, marginHorizontal: -5 },
+  categoryBlock: { gap: 16, marginTop: 4 },
+  categoryBox: {
+    height: 52,
+    borderRadius: Radius.field,
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-    overflow: 'hidden',
-  },
-  imageUploadWithPreview: {
-    borderStyle: 'solid',
-    height: 120,
-  },
-  uploadPlaceholderCompact: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  uploadTitleCompact: {
-    ...Typography.caption,
-    fontWeight: 'bold',
-    color: Colors.primary,
-  },
-  previewImage: {
-    width: '100%',
-    height: '100%',
-  },
-  changeImageBtn: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  changeImageText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  imageHint: {
-    ...Typography.caption,
-    textAlign: 'center',
-    marginBottom: Spacing.lg,
-    color: Colors.textSecondary,
-  },
-  inputSection: {
-    marginBottom: Spacing.lg,
-  },
-  label: {
-    ...Typography.caption,
-    fontSize: 10,
-    color: Colors.textSecondary,
-    fontWeight: 'bold',
-    marginBottom: Spacing.sm,
-  },
-  input: {
-    backgroundColor: Colors.surface,
-    height: 50,
-    borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    color: Colors.text,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  categoryBtn: {
+    borderColor: C.border,
+    backgroundColor: C.surface,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    justifyContent: 'center',
   },
-  activeCategoryBtn: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  categoryBtnText: {
-    ...Typography.body,
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  activeCategoryBtnText: {
-    color: Colors.background,
-    fontWeight: 'bold',
-  },
-  priceInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Spacing.md,
-  },
-  currency: {
-    ...Typography.h3,
-    marginRight: 8,
-  },
-  priceInput: {
+  categoryInput: { height: '100%', paddingVertical: 0, fontFamily: F.jakartaSemiBold, fontSize: 13, color: C.textStrong },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  error: { fontFamily: F.jakartaSemiBold, fontSize: 11, color: C.danger, marginTop: 4 },
+  feeWrap: { paddingHorizontal: 7 },
+  unitsWrap: { paddingHorizontal: 8, gap: 10 },
+  label: { fontFamily: F.jakartaBold, fontSize: 11, lineHeight: 16.5, color: C.textMuted },
+  segment: { flexDirection: 'row', gap: 10 },
+  segmentItem: {
     flex: 1,
-    height: 50,
-    color: Colors.text,
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 8,
+    alignItems: 'flex-start',
+    gap: 2,
+    padding: 12,
+    borderRadius: Radius.field,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
+    backgroundColor: C.surface,
   },
-  stepperBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inventoryText: {
-    ...Typography.body,
-    fontWeight: 'bold',
-  },
-  hint: {
-    ...Typography.caption,
-    fontSize: 10,
-    marginTop: 6,
-    fontStyle: 'italic',
-  },
-  errorHint: {
-    ...Typography.caption,
-    color: Colors.danger,
-    fontSize: 11,
-    marginTop: 6,
-    fontWeight: 'bold',
-  },
-  submitBtn: {
-    backgroundColor: Colors.primary,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Spacing.md,
-  },
-  submitBtnText: {
-    color: Colors.background,
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  submitBtnDisabled: {
-    opacity: 0.7,
-  },
+  segmentActive: { borderColor: C.primary, backgroundColor: '#FFF5ED' },
+  segmentIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#F1F1F4', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  segmentIconActive: { backgroundColor: C.primary },
+  segmentTitle: { fontFamily: F.jakartaBold, fontSize: 13, color: C.textStrong },
+  segmentSub: { fontFamily: F.jakartaRegular, fontSize: 11, color: C.textMuted },
+  segmentCheck: { position: 'absolute', top: 10, right: 10, width: 18, height: 18, borderRadius: 9, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
+  unit: { fontFamily: F.jakartaSemiBold, fontSize: 11, color: C.textMuted },
+  summary: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.softOrange, borderRadius: 14, paddingVertical: 12, marginHorizontal: 8 },
+  summaryItem: { flex: 1, alignItems: 'center', gap: 2 },
+  summaryValue: { fontFamily: F.jakartaBold, fontSize: 15, color: C.primary },
+  summaryLabel: { fontFamily: F.jakartaSemiBold, fontSize: 10, color: C.textMuted },
+  summaryDivider: { width: 1, alignSelf: 'stretch', backgroundColor: 'rgba(252,65,0,0.18)' },
+  remove: { height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  removeText: { fontFamily: F.jakartaBold, fontSize: 13, color: C.danger },
+  footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: C.bg },
 });

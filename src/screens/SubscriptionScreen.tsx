@@ -1,33 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  TextInput,
-  RefreshControl,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  Zap,
-  ChevronLeft,
-  Package,
-  Plus,
-  Calendar,
-  Users,
-  Check,
-  X,
-  Repeat,
-  Flame,
-  TrendingUp,
-} from 'lucide-react-native';
-import { Colors, Spacing, Typography } from '../theme';
-import { useAuth } from '../context/AuthContext';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Modal, Pressable, RefreshControl, KeyboardAvoidingView, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { Calendar, Package, Plus, Repeat, TrendingUp, Users, X, Zap } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
+import { C, F } from '../theme';
+import { Chip, FadeInView, FormField, KitchenHeader, PressableScale, PrimaryButton, ProgressBar, StatusBadge } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
+import { friendlyApiError } from '../utils/apiErrors';
 
 interface Plan {
   id: string;
@@ -49,15 +29,17 @@ interface Slot {
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const DAY_SHORT: Record<string, string> = { Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun' };
 
+/** Subscription slots (subscriptions/plans + subscriptions/slots) in the new design. */
 export const SubscriptionScreen = ({ navigation }: any) => {
   const { token, user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Create slot modal
+  // Create slot sheet
   const [showModal, setShowModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [maxSubs, setMaxSubs] = useState('10');
@@ -118,6 +100,11 @@ export const SubscriptionScreen = ({ navigation }: any) => {
     setRefreshing(false);
   }, [fetchPlans, fetchSlots]);
 
+  const openCreate = (plan: Plan | null) => {
+    setSelectedPlan(plan);
+    setShowModal(true);
+  };
+
   const handleCreateSlot = async () => {
     if (!selectedPlan) {
       Toast.show({ type: 'error', text1: 'Select a Plan', text2: 'Please pick a subscription plan first' });
@@ -146,8 +133,8 @@ export const SubscriptionScreen = ({ navigation }: any) => {
         setMaxSubs('10');
         fetchSlots();
       } else {
-        const err = await res.json().catch(() => ({}));
-        Toast.show({ type: 'error', text1: 'Failed', text2: err.message || 'Could not create slot' });
+        const friendly = friendlyApiError(res.status, await res.json().catch(() => ({})), 'Could not create slot');
+        Toast.show({ type: 'error', text1: 'Failed', text2: friendly.message });
       }
     } catch {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Something went wrong' });
@@ -156,422 +143,202 @@ export const SubscriptionScreen = ({ navigation }: any) => {
     }
   };
 
-  const toggleDay = (day: string) => {
-    setSelectedDays(prev =>
-      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
-    );
-  };
+  const toggleDay = (day: string) =>
+    setSelectedDays(prev => (prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]));
 
   const getPlanForSlot = (slot: Slot) => plans.find(p => p.id === slot.planId);
+  const totalSubs = slots.reduce((sum, s) => sum + (s.currentSubscribers || 0), 0);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ChevronLeft size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Zap size={20} color={Colors.warning} />
-          <Text style={styles.headerTitle}>Fuel</Text>
-        </View>
-        <View style={{ width: 40 }} />
+    <View style={styles.root}>
+      <StatusBar style="dark" />
+      <View style={{ paddingTop: insets.top }}>
+        <KitchenHeader
+          kitchenName="Subscription Slots"
+          subtitle="Recurring deliveries"
+          ownerName={user?.name}
+          onBack={() => navigation.goBack()}
+          onWallet={() => navigation.navigate('Wallet')}
+          onProfile={() => navigation.navigate('Profile')}
+        />
       </View>
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primary]} />}
       >
-        {/* Hero */}
-        <View style={styles.hero}>
-          <View style={styles.heroIconContainer}>
-            <Flame size={32} color={Colors.warning} />
-          </View>
-          <Text style={styles.heroTitle}>Power Your Kitchen</Text>
-          <Text style={styles.heroSubtitle}>
-            Choose a subscription plan and create delivery slots for recurring customers.
-          </Text>
-        </View>
+        <FadeInView style={styles.stats}>
+          {[
+            { Icon: Package, value: plans.length, label: 'Plans' },
+            { Icon: Repeat, value: slots.length, label: 'Active slots' },
+            { Icon: TrendingUp, value: totalSubs, label: 'Subscribers' },
+          ].map(({ Icon, value, label }) => (
+            <View key={label} style={styles.stat}>
+              <Icon size={20} color={C.primaryRing} strokeWidth={1.67} />
+              <Text style={styles.statValue}>{value}</Text>
+              <Text style={styles.statLabel}>{label}</Text>
+            </View>
+          ))}
+        </FadeInView>
 
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Package size={18} color={Colors.primary} />
-            <Text style={styles.statValue}>{plans.length}</Text>
-            <Text style={styles.statLabel}>Plans</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Repeat size={18} color={Colors.cyan} />
-            <Text style={styles.statValue}>{slots.length}</Text>
-            <Text style={styles.statLabel}>Active Slots</Text>
-          </View>
-          <View style={styles.statCard}>
-            <TrendingUp size={18} color={Colors.warning} />
-            <Text style={styles.statValue}>
-              {slots.reduce((sum, s) => sum + (s.currentSubscribers || 0), 0)}
-            </Text>
-            <Text style={styles.statLabel}>Subscribers</Text>
-          </View>
-        </View>
-
-        {/* Plans Section */}
-        <View style={styles.sectionHeader}>
+        <FadeInView delay={60} style={styles.sectionHead}>
           <Text style={styles.sectionTitle}>Subscription Plans</Text>
-        </View>
-
+        </FadeInView>
         {loadingPlans ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={styles.loadingText}>Loading plans...</Text>
-          </View>
+          <ActivityIndicator color={C.primary} />
         ) : plans.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Package size={32} color={Colors.textSecondary} />
-            <Text style={styles.emptyText}>No plans available yet</Text>
+          <View style={styles.empty}>
+            <Package size={22} color={C.iconMuted} />
+            <Text style={styles.emptyText}>No plans available yet.</Text>
           </View>
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.plansScroll}>
-            {plans.map((plan) => (
-              <TouchableOpacity
-                key={plan.id}
-                style={[styles.planCard, selectedPlan?.id === plan.id && styles.planCardSelected]}
-                onPress={() => { setSelectedPlan(plan); setShowModal(true); }}
-                activeOpacity={0.8}
-              >
-                <View style={styles.planIconWrap}>
-                  <Zap size={20} color={selectedPlan?.id === plan.id ? Colors.background : Colors.warning} />
-                </View>
-                <Text style={[styles.planName, selectedPlan?.id === plan.id && styles.planNameSelected]}>{plan.name}</Text>
-                <Text style={[styles.planPrice, selectedPlan?.id === plan.id && styles.planPriceSelected]}>
-                  ₹{plan.price}<Text style={styles.planPriceSuffix}>/mo</Text>
-                </Text>
-                <View style={styles.planMeta}>
-                  <Calendar size={12} color={selectedPlan?.id === plan.id ? Colors.background : Colors.textSecondary} />
-                  <Text style={[styles.planMetaText, selectedPlan?.id === plan.id && { color: Colors.background }]}>
-                    {plan.deliveriesPerWeek}x / week
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.planRow}>
+            {plans.map((plan, i) => (
+              <FadeInView key={plan.id} delay={80 + i * 50}>
+                <PressableScale style={styles.plan} onPress={() => openCreate(plan)} pressedScale={0.97}>
+                  <View style={styles.planIcon}>
+                    <Zap size={18} color={C.primary} strokeWidth={1.67} />
+                  </View>
+                  <Text style={styles.planName} numberOfLines={1}>
+                    {plan.name}
                   </Text>
-                </View>
-                <TouchableOpacity
-                  style={[styles.planBtn, selectedPlan?.id === plan.id && styles.planBtnSelected]}
-                  onPress={() => { setSelectedPlan(plan); setShowModal(true); }}
-                >
-                  <Text style={[styles.planBtnText, selectedPlan?.id === plan.id && styles.planBtnTextSelected]}>
-                    Create Slot
+                  <Text style={styles.planPrice}>
+                    ₹{Number(plan.price).toLocaleString('en-IN')}
+                    <Text style={styles.planPer}>/mo</Text>
                   </Text>
-                </TouchableOpacity>
-              </TouchableOpacity>
+                  <View style={styles.planMeta}>
+                    <Calendar size={12} color={C.textMuted} />
+                    <Text style={styles.planMetaText}>{plan.deliveriesPerWeek}x / week</Text>
+                  </View>
+                  <View style={styles.planCta}>
+                    <Text style={styles.planCtaText}>Create Slot</Text>
+                  </View>
+                </PressableScale>
+              </FadeInView>
             ))}
           </ScrollView>
         )}
 
-        {/* Active Slots Section */}
-        <View style={[styles.sectionHeader, { marginTop: Spacing.xl }]}>
+        <FadeInView delay={140} style={styles.sectionHead}>
           <Text style={styles.sectionTitle}>Your Active Slots</Text>
-          <TouchableOpacity onPress={() => { setSelectedPlan(plans[0] || null); setShowModal(true); }}>
-            <View style={styles.addSlotBtn}>
-              <Plus size={14} color={Colors.background} />
-              <Text style={styles.addSlotText}>New Slot</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
+          <PressableScale style={styles.newBtn} onPress={() => openCreate(plans[0] || null)} pressedScale={0.95}>
+            <Plus size={14} color={C.white} />
+            <Text style={styles.newBtnText}>New Slot</Text>
+          </PressableScale>
+        </FadeInView>
         {loadingSlots ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={styles.loadingText}>Loading slots...</Text>
-          </View>
+          <ActivityIndicator color={C.primary} />
         ) : slots.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <View style={styles.emptyIconCircle}>
-              <Plus size={24} color={Colors.primary} />
-            </View>
-            <Text style={styles.emptyText}>No subscription slots yet</Text>
-            <Text style={styles.emptySubText}>Pick a plan above to create your first slot</Text>
+          <View style={styles.empty}>
+            <Repeat size={22} color={C.iconMuted} />
+            <Text style={styles.emptyText}>No subscription slots yet. Pick a plan above to create one.</Text>
           </View>
         ) : (
-          slots.map((slot) => {
+          slots.map((slot, i) => {
             const plan = getPlanForSlot(slot);
+            const filled = slot.currentSubscribers || 0;
             return (
-              <View key={slot.id} style={styles.slotCard}>
-                <View style={styles.slotCardHeader}>
-                  <View style={styles.slotPlanBadge}>
-                    <Zap size={12} color={Colors.warning} />
-                    <Text style={styles.slotPlanName}>{slot.planName || plan?.name || 'Plan'}</Text>
-                  </View>
-                  <View style={styles.slotStatusBadge}>
-                    <View style={styles.statusDot} />
-                    <Text style={styles.statusText}>{slot.status || 'Active'}</Text>
-                  </View>
+              <FadeInView key={slot.id} delay={160 + Math.min(i, 6) * 50} style={styles.slot}>
+                <View style={styles.slotHead}>
+                  <Zap size={14} color={C.primaryRing} />
+                  <Text style={styles.slotName} numberOfLines={1}>
+                    {slot.planName || plan?.name || 'Plan'}
+                  </Text>
+                  <StatusBadge label={slot.status || 'Active'} tone="success" />
                 </View>
-
-                <View style={styles.slotDetails}>
-                  <View style={styles.slotDetailItem}>
-                    <Users size={14} color={Colors.textSecondary} />
-                    <Text style={styles.slotDetailLabel}>Subscribers</Text>
-                    <Text style={styles.slotDetailValue}>{slot.currentSubscribers || 0}/{slot.maxSubscribers}</Text>
-                  </View>
-                  <View style={styles.slotDetailItem}>
-                    <Calendar size={14} color={Colors.textSecondary} />
-                    <Text style={styles.slotDetailLabel}>Delivery Days</Text>
-                    <Text style={styles.slotDetailValue}>{slot.deliveryDays.map(d => DAY_SHORT[d] || d).join(', ')}</Text>
-                  </View>
+                <View style={styles.slotRow}>
+                  <Users size={14} color={C.textMuted} />
+                  <Text style={styles.slotLabel}>Subscribers</Text>
+                  <Text style={styles.slotValue}>
+                    {filled}/{slot.maxSubscribers}
+                  </Text>
                 </View>
-
-                {/* Progress bar */}
-                <View style={styles.progressBg}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${Math.min(100, ((slot.currentSubscribers || 0) / slot.maxSubscribers) * 100)}%` },
-                    ]}
-                  />
+                <View style={styles.slotRow}>
+                  <Calendar size={14} color={C.textMuted} />
+                  <Text style={styles.slotLabel}>Delivery days</Text>
+                  <Text style={styles.slotValue}>{slot.deliveryDays.map(d => DAY_SHORT[d] || d).join(', ')}</Text>
                 </View>
-              </View>
+                <ProgressBar progress={slot.maxSubscribers ? Math.min(1, filled / slot.maxSubscribers) : 0} from={0} />
+              </FadeInView>
             );
           })
         )}
-
-        <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Create Slot Modal */}
-      <Modal visible={showModal} animationType="slide" transparent onRequestClose={() => setShowModal(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowModal(false)}>
-          <Pressable style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create Subscription Slot</Text>
-              <TouchableOpacity onPress={() => setShowModal(false)}>
-                <X size={24} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+      {/* Create slot sheet */}
+      <Modal visible={showModal} animationType="slide" transparent onRequestClose={() => setShowModal(false)} statusBarTranslucent>
+        <Pressable style={styles.overlay} onPress={() => setShowModal(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <Pressable style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
+              <View style={styles.handle} />
+              <View style={styles.sheetHead}>
+                <Text style={styles.sheetTitle}>Create Subscription Slot</Text>
+                <Pressable onPress={() => setShowModal(false)} hitSlop={10}>
+                  <X size={20} color={C.textMuted} />
+                </Pressable>
+              </View>
 
-            {/* Plan selector */}
-            <Text style={styles.modalLabel}>SELECT PLAN</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.planSelector}>
-              {plans.map(p => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={[styles.planChip, selectedPlan?.id === p.id && styles.planChipActive]}
-                  onPress={() => setSelectedPlan(p)}
-                >
-                  <Text style={[styles.planChipText, selectedPlan?.id === p.id && styles.planChipTextActive]}>
-                    {p.name} — ₹{p.price}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+              <Text style={styles.label}>Plan</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                {plans.map(p => (
+                  <Chip key={p.id} label={`${p.name} · ₹${p.price}`} selected={selectedPlan?.id === p.id} onPress={() => setSelectedPlan(p)} />
+                ))}
+              </ScrollView>
 
-            {/* Max subscribers */}
-            <Text style={styles.modalLabel}>MAX SUBSCRIBERS</Text>
-            <View style={styles.modalInputWrapper}>
-              <Users size={16} color={Colors.primary} />
-              <TextInput
-                style={styles.modalInput}
-                value={maxSubs}
-                onChangeText={setMaxSubs}
-                keyboardType="numeric"
-                placeholder="10"
-                placeholderTextColor={Colors.textSecondary}
-              />
-            </View>
+              <FormField label="Max subscribers" value={maxSubs} onChangeText={(v) => setMaxSubs(v.replace(/\D/g, ''))} keyboardType="number-pad" />
 
-            {/* Delivery days */}
-            <Text style={styles.modalLabel}>DELIVERY DAYS</Text>
-            <View style={styles.daysGrid}>
-              {WEEKDAYS.map(day => (
-                <TouchableOpacity
-                  key={day}
-                  style={[styles.dayChip, selectedDays.includes(day) && styles.dayChipActive]}
-                  onPress={() => toggleDay(day)}
-                >
-                  {selectedDays.includes(day) && <Check size={12} color={Colors.background} />}
-                  <Text style={[styles.dayChipText, selectedDays.includes(day) && styles.dayChipTextActive]}>
-                    {DAY_SHORT[day]}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+              <Text style={styles.label}>Delivery days</Text>
+              <View style={styles.dayGrid}>
+                {WEEKDAYS.map(day => (
+                  <Chip key={day} label={DAY_SHORT[day]} selected={selectedDays.includes(day)} onPress={() => toggleDay(day)} />
+                ))}
+              </View>
 
-            {/* Submit */}
-            <TouchableOpacity
-              style={[styles.createBtn, creating && { opacity: 0.7 }]}
-              onPress={handleCreateSlot}
-              disabled={creating}
-            >
-              {creating ? (
-                <ActivityIndicator color={Colors.background} />
-              ) : (
-                <>
-                  <Zap size={18} color={Colors.background} />
-                  <Text style={styles.createBtnText}>Launch Slot</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </Pressable>
+              <PrimaryButton label="Create Slot" onPress={handleCreateSlot} loading={creating} style={{ marginTop: 8 }} />
+            </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-  },
-  backBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center',
-  },
-  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerTitle: { ...Typography.h2 },
-  scroll: { flex: 1 },
-  scrollContent: { padding: Spacing.lg },
-
-  // Hero
-  hero: { alignItems: 'center', marginBottom: 28 },
-  heroIconContainer: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: 'rgba(250, 204, 21, 0.1)',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
-    borderWidth: 1, borderColor: 'rgba(250, 204, 21, 0.2)',
-  },
-  heroTitle: { ...Typography.h1, fontSize: 26, marginBottom: 8 },
-  heroSubtitle: { ...Typography.body, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, paddingHorizontal: 20 },
-
-  // Stats
-  statsRow: { flexDirection: 'row', marginBottom: Spacing.xl, gap: 10 },
-  statCard: {
-    flex: 1, backgroundColor: Colors.surface, borderRadius: 16, padding: 14,
-    alignItems: 'center', borderWidth: 1, borderColor: Colors.border, gap: 6,
-  },
-  statValue: { ...Typography.h2, fontSize: 22 },
-  statLabel: { ...Typography.caption, fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5 },
-
-  // Section
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
-  sectionTitle: { ...Typography.h3 },
-
-  // Plans
-  plansScroll: { gap: 12, paddingBottom: 4 },
-  planCard: {
-    width: 170, backgroundColor: Colors.surface, borderRadius: 20, padding: 18,
-    borderWidth: 1, borderColor: Colors.border,
-  },
-  planCardSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  planIconWrap: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'rgba(250, 204, 21, 0.1)',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
-  },
-  planName: { ...Typography.body, fontWeight: 'bold', marginBottom: 4 },
-  planNameSelected: { color: Colors.background },
-  planPrice: { ...Typography.h1, fontSize: 24, marginBottom: 8 },
-  planPriceSelected: { color: Colors.background },
-  planPriceSuffix: { fontSize: 12, fontWeight: 'normal' },
-  planMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 14 },
-  planMetaText: { ...Typography.caption, fontSize: 11 },
-  planBtn: {
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    paddingVertical: 8, borderRadius: 10, alignItems: 'center',
-    borderWidth: 1, borderColor: Colors.primary,
-  },
-  planBtnSelected: { backgroundColor: Colors.background, borderColor: Colors.background },
-  planBtnText: { color: Colors.primary, fontWeight: 'bold', fontSize: 12 },
-  planBtnTextSelected: { color: Colors.primary },
-
-  // Slots
-  addSlotBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
-  },
-  addSlotText: { color: Colors.background, fontWeight: 'bold', fontSize: 12 },
-  slotCard: {
-    backgroundColor: Colors.surface, borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: Colors.border, marginBottom: 12,
-  },
-  slotCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  slotPlanBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(250, 204, 21, 0.1)',
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10,
-  },
-  slotPlanName: { color: Colors.warning, fontSize: 12, fontWeight: 'bold' },
-  slotStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary },
-  statusText: { color: Colors.primary, fontSize: 10, fontWeight: 'bold' },
-  slotDetails: { gap: 10 },
-  slotDetailItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  slotDetailLabel: { ...Typography.caption, fontSize: 11, flex: 1 },
-  slotDetailValue: { ...Typography.body, fontSize: 13, fontWeight: '600' },
-  progressBg: { height: 4, backgroundColor: Colors.border, borderRadius: 2, marginTop: 14, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 2 },
-
-  // Loading/Empty
-  loadingBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 24 },
-  loadingText: { ...Typography.caption },
-  emptyBox: {
-    padding: 32, alignItems: 'center', backgroundColor: Colors.surface,
-    borderRadius: 20, borderWidth: 1, borderColor: Colors.border, borderStyle: 'dashed',
-  },
-  emptyIconCircle: {
-    width: 52, height: 52, borderRadius: 26,
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
-  },
-  emptyText: { ...Typography.body, color: Colors.textSecondary, marginTop: 8 },
-  emptySubText: { ...Typography.caption, marginTop: 4, textAlign: 'center' },
-
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modalContent: {
-    backgroundColor: Colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: Spacing.lg, paddingBottom: 40, maxHeight: '85%',
-  },
-  modalHandle: {
-    width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2,
-    alignSelf: 'center', marginBottom: 16,
-  },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { ...Typography.h2 },
-  modalLabel: { fontSize: 10, fontWeight: 'bold', color: Colors.textSecondary, letterSpacing: 1, marginBottom: 8, marginTop: 16 },
-  planSelector: { marginBottom: 4, maxHeight: 44 },
-  planChip: {
-    backgroundColor: Colors.background, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10,
-    borderWidth: 1, borderColor: Colors.border, marginRight: 8,
-  },
-  planChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  planChipText: { color: Colors.text, fontSize: 12, fontWeight: 'bold' },
-  planChipTextActive: { color: Colors.background },
-
-  modalInputWrapper: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background,
-    borderRadius: 12, paddingHorizontal: 12, height: 48, borderWidth: 1, borderColor: Colors.border, gap: 8,
-  },
-  modalInput: { flex: 1, ...Typography.body, color: Colors.text },
-
-  daysGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  dayChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.background, paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 10, borderWidth: 1, borderColor: Colors.border,
-  },
-  dayChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  dayChipText: { color: Colors.text, fontSize: 12, fontWeight: 'bold' },
-  dayChipTextActive: { color: Colors.background },
-
-  createBtn: {
-    backgroundColor: Colors.primary, height: 54, borderRadius: 27,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    marginTop: 24, gap: 8,
-    shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 8,
-  },
-  createBtnText: { color: Colors.background, fontWeight: 'bold', fontSize: 16 },
+  root: { flex: 1, backgroundColor: C.bg },
+  content: { paddingHorizontal: 20, paddingTop: 4, gap: 12 },
+  stats: { flexDirection: 'row', gap: 12 },
+  stat: { flex: 1, backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border, padding: 14 },
+  statValue: { fontFamily: F.jakartaBold, fontSize: 20, lineHeight: 30, color: C.textStrong, paddingTop: 10 },
+  statLabel: { fontFamily: F.jakartaSemiBold, fontSize: 10, lineHeight: 15, color: C.textMuted },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+  sectionTitle: { fontFamily: F.jakartaBold, fontSize: 17, lineHeight: 25.5, color: C.textStrong },
+  planRow: { gap: 12, paddingRight: 4 },
+  plan: { width: 168, backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border, padding: 14, gap: 6 },
+  planIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: C.softOrange, alignItems: 'center', justifyContent: 'center' },
+  planName: { fontFamily: F.jakartaBold, fontSize: 13, color: C.textStrong, marginTop: 4 },
+  planPrice: { fontFamily: F.jakartaBold, fontSize: 18, color: C.primaryRing },
+  planPer: { fontFamily: F.jakartaSemiBold, fontSize: 11, color: C.textMuted },
+  planMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  planMetaText: { fontFamily: F.jakartaSemiBold, fontSize: 11, color: C.textMuted },
+  planCta: { marginTop: 6, height: 34, borderRadius: 12, backgroundColor: C.softOrange, alignItems: 'center', justifyContent: 'center' },
+  planCtaText: { fontFamily: F.jakartaBold, fontSize: 12, color: C.primary },
+  newBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.primary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 7 },
+  newBtnText: { fontFamily: F.jakartaBold, fontSize: 12, color: C.white },
+  slot: { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border, padding: 14, gap: 10 },
+  slotHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  slotName: { flex: 1, fontFamily: F.jakartaBold, fontSize: 13, color: C.textStrong },
+  slotRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  slotLabel: { flex: 1, fontFamily: F.jakartaRegular, fontSize: 12, color: C.textMuted },
+  slotValue: { fontFamily: F.jakartaBold, fontSize: 12, color: C.textStrong },
+  empty: { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border, paddingVertical: 28, paddingHorizontal: 20, alignItems: 'center', gap: 8 },
+  emptyText: { fontFamily: F.jakartaSemiBold, fontSize: 12, color: C.textMuted, textAlign: 'center' },
+  overlay: { flex: 1, backgroundColor: 'rgba(23,23,26,0.45)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: C.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, gap: 12 },
+  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: C.borderInput },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sheetTitle: { fontFamily: F.jakartaBold, fontSize: 18, color: C.textStrong },
+  label: { fontFamily: F.jakartaBold, fontSize: 11, color: C.textMuted },
+  chipRow: { gap: 8 },
+  dayGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 });

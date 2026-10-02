@@ -1,343 +1,202 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Spacing, Typography } from '../theme';
-import { OrderCard } from '../components/OrderCard';
-import { ChefTip } from '../components/ChefTip';
-import { ShoppingBag, X, Check, AlertCircle } from 'lucide-react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
+import { AlertCircle, ShoppingBag } from 'lucide-react-native';
+import { C, F } from '../theme';
+import { FadeInView, KitchenHeader } from '../components/ui';
+import { OrderCard, OrderCardSkeleton } from '../components/OrderCard';
+import { QuickAddFab } from '../components/QuickAddFab';
+import { useOrderStatusSheet } from '../components/OrderStatusSheet';
+import { useChefOrders } from '../hooks/useChefOrders';
+import { useTabBarSpace } from '../navigation/FloatingTabBar';
 import { useAuth } from '../context/AuthContext';
+import { isActiveOrder } from '../utils/orders';
+
+type Filter = 'Active' | 'Completed';
 
 export const OrdersScreen = () => {
-  const [activeTab, setActiveTab] = useState<'Active' | 'Completed'>('Active');
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { token } = useAuth();
+  const navigation = useNavigation<any>();
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const bottomSpace = useTabBarSpace();
+  const [filter, setFilter] = useState<Filter>('Active');
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
-  const fetchOrders = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    
-    setError(null);
-    try {
-      const url = `${process.env.EXPO_PUBLIC_API_URL}orders/chef`;
-      console.log('API Request: GET', url);
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+  const { orders, loading, refreshing, error, updatingId, fetchOrders, updateStatus } = useChefOrders();
+  const { openStatusSheet, statusSheet } = useOrderStatusSheet(updateStatus);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.log('API Error:', response.status, errorText);
-        throw new Error('Failed to fetch orders');
-      }
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrders().then(() => setUpdatedAt(new Date()));
+    }, [fetchOrders])
+  );
 
-      const result = await response.json();
-      console.log('API Response:', JSON.stringify(result, null, 2));
-      
-      if (result.status === 'success') {
-        const allOrders = result.data;
-        // Filter orders based on active tab
-        const filtered = allOrders.filter((order: any) => {
-          if (activeTab === 'Active') {
-            return ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(order.status);
-          } else {
-            return ['DELIVERED', 'CANCELLED'].includes(order.status);
-          }
-        });
-        setOrders(filtered);
-      } else {
-        throw new Error(result.message || 'Something went wrong');
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [activeTab, token]);
+  const shown = orders.filter((o) => (filter === 'Active' ? isActiveOrder(o) : !isActiveOrder(o)));
+  const kitchenName = user?.kitchen_name || (user?.name ? `${user.name.split(' ')[0]}’s Kitchen` : 'My Kitchen');
 
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
-
-  const handleStatusUpdate = async (orderId: string, newStatus: string) => {
-    try {
-      const url = `${process.env.EXPO_PUBLIC_API_URL}orders/${orderId}/status`;
-      console.log('API Request: PATCH', url, { status: newStatus });
-      
-      const response = await fetch(url, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-
-      const result = await response.json();
-      console.log('API Response:', JSON.stringify(result, null, 2));
-
-      if (response.ok) {
-        // Refresh orders after update
-        fetchOrders(true);
-      } else {
-        alert(result.message || 'Failed to update status');
-      }
-    } catch (error) {
-      console.error('Status update error:', error);
-      alert('Network error while updating status');
-    }
-  };
-
-  const getItemsText = (items: any[]) => {
-    return items.map(item => {
-      const name = item.daily_meal?.meal_name || item.pantry_item?.name || 'Unknown Item';
-      return `${item.quantity}x ${name}`;
-    }).join(', ');
-  };
+  const minutesAgo = updatedAt ? Math.round((Date.now() - updatedAt.getTime()) / 60000) : 0;
+  const updatedLabel = minutesAgo < 1 ? 'Updated just now' : `Updated ${minutesAgo} min ago`;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <View style={styles.container}>
-        <Text style={styles.screenTitle}>Orders</Text>
-        {/* Tab Toggle */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'Active' && styles.activeTab]}
-            onPress={() => setActiveTab('Active')}
-          >
-            <Text style={[styles.tabText, activeTab === 'Active' && styles.activeTabText]}>Active</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'Completed' && styles.activeTab]}
-            onPress={() => setActiveTab('Completed')}
-          >
-            <Text style={[styles.tabText, activeTab === 'Completed' && styles.activeTabText]}>Completed</Text>
-          </TouchableOpacity>
-        </View>
-
-        {loading && !refreshing ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>Fetching orders...</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.errorContainer}>
-            <AlertCircle size={40} color={Colors.danger} />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryBtn} onPress={() => fetchOrders()}>
-              <Text style={styles.retryText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <ScrollView 
-            contentContainerStyle={styles.scrollContent}
-            refreshControl={
-              <RefreshControl 
-                refreshing={refreshing} 
-                onRefresh={() => fetchOrders(true)} 
-                tintColor={Colors.primary}
-              />
-            }
-          >
-            {orders.length > 0 ? (
-              <>
-                {orders.map(order => (
-                  <OrderCard 
-                    key={order.id}
-                    orderId={`#${order.id.split('-')[0].toUpperCase()}`}
-                    items={getItemsText(order.items)}
-                    status={order.status}
-                    deliveryTime={new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    location={order.user?.name || 'Customer'}
-                    onActionPress={(newStatus?: string) => {
-                      if (newStatus) {
-                        handleStatusUpdate(order.id, newStatus);
-                      }
-                    }}
-                  />
-                ))}
-
-                {activeTab === 'Active' && (
-                  <ChefTip tip="Ensure all active orders are being prepared to meet delivery timelines." />
-                )}
-              </>
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>
-                  {activeTab === 'Active' ? 'No active orders at the moment.' : 'No completed orders found.'}
-                </Text>
-              </View>
-            )}
-          </ScrollView>
-        )}
+    <View style={styles.root}>
+      <StatusBar style="dark" />
+      <View style={{ paddingTop: insets.top }}>
+        <KitchenHeader
+          kitchenName={kitchenName}
+          ownerName={user?.name}
+          onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+          onInbox={() => setFilter((f) => (f === 'Active' ? 'Completed' : 'Active'))}
+          onProfile={() => navigation.navigate('Profile')}
+        />
       </View>
-    </SafeAreaView>
+
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: bottomSpace + 60 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchOrders(true).then(() => setUpdatedAt(new Date()))}
+            tintColor={C.primary}
+            colors={[C.primary]}
+          />
+        }
+      >
+        <FadeInView style={styles.overview}>
+          <Text style={styles.eyebrow}>TODAY'S OVERVIEW</Text>
+          <Text style={styles.overviewTitle}>{filter === 'Active' ? 'Active Orders' : 'Completed Orders'}</Text>
+          <Text style={styles.overviewSub}>{updatedLabel} · Manage today's kitchen activity.</Text>
+          <View style={styles.segment}>
+            {(['Active', 'Completed'] as Filter[]).map((f) => (
+              <Pressable key={f} onPress={() => setFilter(f)} style={[styles.segmentItem, filter === f && styles.segmentActive]}>
+                <Text style={[styles.segmentText, filter === f && styles.segmentTextActive]}>{f}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </FadeInView>
+
+        {loading && orders.length === 0 ? (
+          <View style={{ gap: 16 }}>
+            <OrderCardSkeleton />
+            <OrderCardSkeleton />
+            <OrderCardSkeleton />
+          </View>
+        ) : error && orders.length === 0 ? (
+          <Pressable onPress={() => fetchOrders()} style={styles.empty}>
+            <AlertCircle size={22} color={C.danger} />
+            <Text style={styles.emptyText}>{error} Tap to retry.</Text>
+          </Pressable>
+        ) : shown.length === 0 ? (
+          <FadeInView delay={80} style={styles.empty}>
+            <ShoppingBag size={22} color={C.iconMuted} />
+            <Text style={styles.emptyText}>
+              {filter === 'Active' ? 'No active orders at the moment.' : 'No completed orders yet.'}
+            </Text>
+          </FadeInView>
+        ) : (
+          shown.map((o, i) => (
+            <FadeInView key={o.id} delay={60 + Math.min(i, 8) * 60}>
+              <OrderCard
+                order={o}
+                updating={updatingId === o.id}
+                onAccept={() => updateStatus(o.id, 'CONFIRMED')}
+                onChangeStatus={() => openStatusSheet(o)}
+                onPress={() => openStatusSheet(o)}
+              />
+            </FadeInView>
+          ))
+        )}
+      </ScrollView>
+
+      <QuickAddFab />
+      {statusSheet}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: C.bg,
   },
-  container: {
-    flex: 1,
-    padding: Spacing.md,
-  },
-  screenTitle: {
-    ...Typography.h1,
-    marginBottom: Spacing.lg,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    padding: 4,
-    borderRadius: 25,
-    marginBottom: Spacing.lg,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 22,
-  },
-  activeTab: {
-    backgroundColor: Colors.primaryDark,
-  },
-  tabText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    fontWeight: 'bold',
-  },
-  activeTabText: {
-    color: Colors.background,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  incomingRequest: {
-    backgroundColor: '#1A2E1A', // dark green tint
-    borderRadius: 16,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(74, 222, 128, 0.3)',
-    marginBottom: Spacing.md,
-  },
-  incomingHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  incomingIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(74, 222, 128, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.sm,
-  },
-  incomingTitle: {
-    ...Typography.h3,
-    fontSize: 16,
-  },
-  incomingSubtitle: {
-    ...Typography.caption,
-  },
-  incomingActions: {
-    flexDirection: 'row',
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
     gap: 12,
   },
-  ignoreBtn: {
-    flex: 1,
-    height: 40,
+  overview: {
+    backgroundColor: C.surface,
     borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: C.border,
+    padding: 16,
+    gap: 3,
+    marginBottom: 2,
   },
-  ignoreBtnText: {
-    color: Colors.textSecondary,
-    fontWeight: 'bold',
-    marginLeft: 6,
-    fontSize: 12,
+  eyebrow: {
+    fontFamily: F.jakartaBold,
+    fontSize: 10,
+    lineHeight: 15,
+    letterSpacing: 0.5,
+    color: C.primaryRing,
   },
-  acceptBtn: {
-    flex: 2,
-    height: 40,
-    borderRadius: 20,
+  overviewTitle: {
+    fontFamily: F.jakartaBold,
+    fontSize: 19,
+    lineHeight: 28.5,
+    color: C.textStrong,
+  },
+  overviewSub: {
+    fontFamily: F.jakartaRegular,
+    fontSize: 11,
+    lineHeight: 16.5,
+    color: C.textMuted,
+  },
+  segment: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    marginTop: 10,
+    padding: 3,
+    borderRadius: 12,
+    backgroundColor: '#F4F5FA',
+    alignSelf: 'flex-start',
   },
-  acceptBtnText: {
-    color: Colors.background,
-    fontWeight: 'bold',
-    marginLeft: 6,
-    fontSize: 12,
+  segmentItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 9,
   },
-  emptyContainer: {
-    flex: 1,
+  segmentActive: {
+    backgroundColor: C.surface,
+    shadowColor: '#15151A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  segmentText: {
+    fontFamily: F.jakartaBold,
+    fontSize: 11,
+    color: C.textMuted,
+  },
+  segmentTextActive: {
+    color: C.primary,
+  },
+  empty: {
+    backgroundColor: C.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingVertical: 28,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 100,
+    gap: 8,
   },
   emptyText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    ...Typography.body,
-    marginTop: Spacing.md,
-    color: Colors.textSecondary,
-  },
-  errorContainer: {
-    padding: Spacing.xl,
-    alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.05)',
-    borderRadius: 16,
-    marginTop: Spacing.xl,
-  },
-  errorText: {
-    ...Typography.body,
-    color: Colors.danger,
+    fontFamily: F.jakartaSemiBold,
+    fontSize: 12,
+    color: C.textMuted,
     textAlign: 'center',
-    marginBottom: Spacing.lg,
-  },
-  retryBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.sm,
-    borderRadius: 20,
-  },
-  retryText: {
-    ...Typography.h3,
-    fontSize: 14,
-    color: Colors.background,
+    paddingHorizontal: 24,
   },
 });
-

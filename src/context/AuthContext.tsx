@@ -8,6 +8,16 @@ const SESSION_KEY = 'userToken';
 // short-lived registration token (role: USER + isRegistrationPending) — it is
 // EXPECTED to 403 on chef routes, so it must never be sent to them.
 const PENDING_KEY = 'pendingRegistration';
+// Last application status confirmed by GET chefs/profile — used only when the
+// profile can't be fetched (offline), so an approved chef isn't locked out.
+const STATUS_KEY = 'chefApplicationStatus';
+
+/**
+ * Admin-review state of a chef. Only `APPROVED` may enter the dashboard;
+ * anything else — including unknown — goes to the review status screen.
+ */
+export const getApplicationStatus = (u?: { application_status?: string; status?: string } | null) =>
+  (u?.application_status ?? u?.status)?.toUpperCase();
 
 type UserProfile = {
   id: string;
@@ -27,6 +37,11 @@ type UserProfile = {
   bank_name?: string;
   bank_account_number?: string;
   ifsc_code?: string;
+  /** Optional review details — read if the backend sends them (status screen). */
+  rejection_reason?: string;
+  rejection_details?: string;
+  reviewed_at?: string;
+  documents?: { type?: string; name?: string; status?: string }[];
 };
 
 /**
@@ -107,6 +122,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await SecureStore.setItemAsync(PENDING_KEY, JSON.stringify(reg));
   };
 
+  /** Profile unavailable (offline): keep what we know, never invent APPROVED. */
+  const applyFallbackUser = async (fallback: UserProfile | null, payloadStatus?: string) => {
+    const cached = await SecureStore.getItemAsync(STATUS_KEY);
+    const appStatus = fallback?.application_status ?? payloadStatus ?? cached ?? undefined;
+    setUser(fallback ? { ...fallback, application_status: appStatus, status: appStatus } : ({ application_status: appStatus, status: appStatus } as UserProfile));
+  };
+
   const clearAll = async () => {
     setToken(null);
     setUser(null);
@@ -114,6 +136,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setPendingRegistration(null);
     await SecureStore.deleteItemAsync(SESSION_KEY);
     await SecureStore.deleteItemAsync(PENDING_KEY);
+    await SecureStore.deleteItemAsync(STATUS_KEY);
   };
 
   const handleUnauthorized = (error?: ApiError | { code?: string } | null) => {
@@ -165,10 +188,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Normalise: expose the review state as both `application_status` (API
         // name) and `status` so every consumer can read it either way.
         const profile = result.data ?? {};
+        const appStatus = profile.application_status ?? profile.status;
         setUser({
           ...profile,
-          status: profile.application_status ?? profile.status,
+          status: appStatus,
         });
+        if (appStatus) await SecureStore.setItemAsync(STATUS_KEY, String(appStatus));
         return 'ok';
       }
       return 'error';
@@ -210,7 +235,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       return false;
     } catch (error) {
-      console.error('Error updating profile:', error);
+      // Usually no connection; the caller shows a friendly toast (console.error
+      // would raise the red dev overlay instead).
+      console.log('Error updating profile:', error);
       return false;
     }
   };
@@ -238,7 +265,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               // Signup was actually completed elsewhere — promote to a session.
               await SecureStore.deleteItemAsync(PENDING_KEY);
               setPendingRegistration(null);
-              await login(nextToken, p.user);
+              await login(nextToken, p.user ? { ...p.user, application_status: p.user.application_status ?? p.applicationStatus } : null);
             } else {
               await persistPending({
                 token: nextToken,
@@ -275,9 +302,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             await beginRegistration({ token: nextToken, step: p.registrationStep || 1 });
           } else {
             await persistSessionToken(nextToken);
+            // The refresh payload's `user` may not carry the review status, so
+            // always confirm it from the profile before routing.
+            const result = await fetchProfile(nextToken);
+            if (result === 'unauthorized') return;
+            if (result === 'error') await applyFallbackUser(p.user, p.applicationStatus);
             setIsAuthenticated(true);
-            if (p.user) setUser(p.user);
-            else await fetchProfile(nextToken);
           }
         } catch (error) {
           if (error instanceof ApiError && error.isAuthError) {
@@ -288,8 +318,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             // will clear it and route to login.
             console.log('Token refresh failed, using stored token:', (error as Error)?.message);
             setToken(storedToken);
+            const result = await fetchProfile(storedToken);
+            if (result === 'unauthorized') return;
+            if (result === 'error') await applyFallbackUser(null);
             setIsAuthenticated(true);
-            await fetchProfile(storedToken);
           }
         }
       } catch (error) {
@@ -308,16 +340,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await SecureStore.deleteItemAsync(PENDING_KEY);
     if (newToken) {
       await persistSessionToken(newToken);
-      // Need the full profile (esp. `status`) to route dashboard vs. review
-      // screen, so only skip the fetch when we already have a status.
-      if (nextUser && nextUser.status) {
-        setUser(nextUser);
-      } else {
-        const result = await fetchProfile(newToken);
-        // The token was rejected as a chef session (e.g. role:USER) — don't
-        // flip into the authenticated app; handleUnauthorized already routed out.
-        if (result === 'unauthorized') return;
-      }
+      // Always confirm the admin-review status from the profile: `user.status`
+      // on auth payloads can be an account state (e.g. ACTIVE), and a missing
+      // status must never fall through to the dashboard.
+      const result = await fetchProfile(newToken);
+      // The token was rejected as a chef session (e.g. role:USER) — don't
+      // flip into the authenticated app; handleUnauthorized already routed out.
+      if (result === 'unauthorized') return;
+      if (result === 'error') await applyFallbackUser(nextUser ?? null);
     }
     setIsAuthenticated(true);
   };

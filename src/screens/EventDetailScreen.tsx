@@ -1,302 +1,175 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  Image, 
-  TouchableOpacity, 
-  ActivityIndicator,
-  Alert
-} from 'react-native';
-import { MapPin, Calendar, Clock, ChevronLeft, Map as MapIcon, Info, Users } from 'lucide-react-native';
-import { Colors, Spacing, Typography } from '../theme';
-import { SlotProgress } from '../components/SlotProgress';
-import { useSocial, SocialEvent } from '../context/SocialContext';
+import { View, Text, StyleSheet, ScrollView, Image, ActivityIndicator, Linking, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { format } from 'date-fns';
-import MapView, { Marker } from '../components/PlatformMap';
+import { ArrowLeft, Calendar, Clock, MapPin, Navigation, Scale, Users } from 'lucide-react-native';
+import { C, F } from '../theme';
+import { FadeInView, PressableScale, ProgressBar } from '../components/ui';
+import { useSocial, SocialEvent } from '../context/SocialContext';
 import { resolveImageSource } from '../utils/media';
 import { getSocialBookedCount } from '../utils/socialEvent';
 
+/** Social Table details — new design pattern (photo hero, info chips, seat progress, location card). */
 export const EventDetailScreen = ({ route, navigation }: any) => {
   const { eventId } = route.params;
-  const { fetchEventDetails, joinEvent } = useSocial();
+  const { fetchEventDetails } = useSocial();
+  const insets = useSafeAreaInsets();
   const [event, setEvent] = useState<SocialEvent | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadEvent();
+    (async () => {
+      const data = await fetchEventDetails(eventId);
+      setEvent(data);
+      setLoading(false);
+    })();
   }, [eventId]);
-
-  const loadEvent = async () => {
-    const data = await fetchEventDetails(eventId);
-    setEvent(data);
-    setLoading(false);
-  };
-
-
-
-  const getImageUrl = () =>
-    resolveImageSource(event?.image_url) ||
-    resolveImageSource(event?.chef?.kitchen_photo_url) ||
-    { uri: 'https://via.placeholder.com/800x400' };
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator color={C.primary} />
       </View>
     );
   }
-
   if (!event) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>Event not found</Text>
+        <Text style={styles.muted}>This Social Table could not be found.</Text>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
+          <Text style={styles.link}>Go back</Text>
+        </Pressable>
       </View>
     );
   }
 
-  const bookedCount = getSocialBookedCount(event);
-  const isFull = bookedCount >= event.slots_total;
+  const booked = getSocialBookedCount(event);
+  const left = Math.max(0, event.slots_total - booked);
+  const image = resolveImageSource(event.image_url) || resolveImageSource(event.chef?.kitchen_photo_url);
+  const start = new Date(event.date);
+  const end = event.end_date ? new Date(event.end_date) : null;
+
+  const openMaps = () =>
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`).catch(() => {});
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.imageContainer}>
-        <Image
-          source={getImageUrl()}
-          style={styles.image}
-        />
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <ChevronLeft size={24} color={Colors.text} />
-        </TouchableOpacity>
-      </View>
+    <View style={styles.root}>
+      <StatusBar style="light" />
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 110 }} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          {image ? <Image source={image} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
+          <View style={styles.heroShade} />
+          <PressableScale style={[styles.back, { top: insets.top + 8 }]} onPress={() => navigation.goBack()} pressedScale={0.9}>
+            <ArrowLeft size={18} color={C.text} strokeWidth={2} />
+          </PressableScale>
+        </View>
 
-      <View style={styles.content}>
-        <Text style={styles.title}>{event.title}</Text>
-        
-        <View style={styles.metaRow}>
-          <View style={styles.metaItem}>
-            <Calendar size={18} color={Colors.primary} />
-            <View style={styles.metaTextContainer}>
-              <Text style={styles.metaLabel}>{format(new Date(event.date), 'EEEE, MMM dd')}</Text>
-              <Text style={styles.metaSubLabel}>{format(new Date(event.date), 'h:mm a')} onwards</Text>
+        <View style={styles.sheet}>
+          <FadeInView style={styles.info}>
+            <Text style={styles.eyebrow}>SOCIAL TABLE</Text>
+            <Text style={styles.title}>{event.title}</Text>
+            <View style={styles.metaRow}>
+              <View style={[styles.pill, left === 0 && { backgroundColor: C.dangerBg }]}>
+                <Text style={[styles.pillText, left === 0 && { color: C.danger }]}>
+                  {left === 0 ? 'House full' : `${booked} joined · ${left} left`}
+                </Text>
+              </View>
+              <Text style={styles.price}>₹{Number(event.price).toLocaleString('en-IN')}</Text>
             </View>
-          </View>
-        </View>
+            {!!event.description && <Text style={styles.description}>{event.description}</Text>}
+          </FadeInView>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About Event</Text>
-          <Text style={styles.description}>{event.description}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Availability</Text>
-          <View style={styles.slotBox}>
-            <SlotProgress 
-              label="Slots Filled" 
-              booked={bookedCount} 
-              total={event.slots_total} 
-              color={Colors.primary}
-            />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Location</Text>
-          <View style={styles.mapContainer}>
-            <MapView
-              style={styles.map}
-              initialRegion={{
-                latitude: 19.0760,
-                longitude: 72.8777,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }}
-              scrollEnabled={false}
-              zoomEnabled={false}
-            >
-              <Marker coordinate={{ latitude: 19.0760, longitude: 72.8777 }} />
-            </MapView>
-            <View style={styles.locationOverlay}>
-              <MapPin size={16} color={Colors.primary} />
-              <Text style={styles.locationText} numberOfLines={2}>{event.location}</Text>
+          <FadeInView delay={80} style={styles.chips}>
+            <View style={styles.chip}>
+              <Calendar size={14} color={C.primaryRing} />
+              <Text style={styles.chipText}>{format(start, 'EEE, d MMM')}</Text>
             </View>
-          </View>
+            <View style={styles.chip}>
+              <Clock size={14} color={C.primaryRing} />
+              <Text style={styles.chipText}>
+                {format(start, 'h:mm a')}
+                {end ? ` – ${format(end, 'h:mm a')}` : ''}
+              </Text>
+            </View>
+            {event.social_balance && (
+              <View style={styles.chip}>
+                <Scale size={14} color={C.primaryRing} />
+                <Text style={styles.chipText}>Balanced</Text>
+              </View>
+            )}
+          </FadeInView>
+
+          <FadeInView delay={140} style={styles.card}>
+            <View style={styles.cardHead}>
+              <Users size={18} color={C.primaryRing} strokeWidth={1.67} />
+              <Text style={styles.cardTitle}>Seats</Text>
+              <Text style={styles.cardValue}>
+                {booked}/{event.slots_total}
+              </Text>
+            </View>
+            <ProgressBar progress={event.slots_total ? booked / event.slots_total : 0} from={0} />
+          </FadeInView>
+
+          <FadeInView delay={200} style={styles.card}>
+            <View style={styles.cardHead}>
+              <MapPin size={18} color={C.primaryRing} strokeWidth={1.67} />
+              <Text style={styles.cardTitle}>Location</Text>
+            </View>
+            <Text style={styles.location}>{event.location}</Text>
+            <PressableScale style={styles.mapsBtn} onPress={openMaps} pressedScale={0.97}>
+              <Navigation size={14} color={C.primary} />
+              <Text style={styles.mapsText}>Open in Maps</Text>
+            </PressableScale>
+          </FadeInView>
         </View>
-      </View>
-      
-      <View style={styles.footer}>
-        <View>
-          <Text style={styles.footerPriceLabel}>Contribution</Text>
-          <Text style={styles.footerPrice}>₹{event.price}</Text>
-        </View>
-        <View style={styles.footerInfo}>
-          <Users size={16} color={Colors.textSecondary} />
-          <Text style={styles.footerInfoText}>{event.slots_total - bookedCount} slots left</Text>
-        </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-  },
-  imageContainer: {
-    width: '100%',
-    height: 250,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  backButton: {
+  root: { flex: 1, backgroundColor: C.bg },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: C.bg },
+  muted: { fontFamily: F.jakartaSemiBold, fontSize: 13, color: C.textMuted },
+  link: { fontFamily: F.jakartaBold, fontSize: 13, color: C.primary },
+  hero: { height: 300, backgroundColor: '#F0F0F2' },
+  heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.12)' },
+  back: {
     position: 'absolute',
-    top: 50,
     left: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.92)',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  content: {
-    padding: Spacing.lg,
+  sheet: {
+    marginTop: -24,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    marginTop: -24,
-    backgroundColor: Colors.background,
+    backgroundColor: C.bg,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    gap: 16,
   },
-  title: {
-    ...Typography.h1,
-    marginBottom: Spacing.md,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    marginBottom: Spacing.xl,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  metaTextContainer: {
-    marginLeft: Spacing.sm,
-  },
-  metaLabel: {
-    ...Typography.body,
-    fontWeight: 'bold',
-  },
-  metaSubLabel: {
-    ...Typography.caption,
-  },
-  section: {
-    marginBottom: Spacing.xl,
-  },
-  sectionTitle: {
-    ...Typography.h2,
-    marginBottom: Spacing.sm,
-  },
-  description: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-  },
-  slotGrid: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-  },
-  slotBox: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    padding: Spacing.md,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  joinBtn: {
-    marginTop: Spacing.md,
-    backgroundColor: Colors.cyan,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  joinBtnText: {
-    color: Colors.background,
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  disabledBtn: {
-    backgroundColor: Colors.border,
-    opacity: 0.5,
-  },
-  mapContainer: {
-    height: 180,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginTop: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  locationOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(30, 30, 30, 0.9)',
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  locationText: {
-    ...Typography.caption,
-    color: Colors.text,
-    marginLeft: 8,
-    flex: 1,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: Spacing.lg,
-    backgroundColor: Colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  footerPriceLabel: {
-    ...Typography.caption,
-  },
-  footerPrice: {
-    ...Typography.h1,
-    color: Colors.primary,
-  },
-  footerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  footerInfoText: {
-    ...Typography.caption,
-    marginLeft: 4,
-  },
-  errorText: {
-    ...Typography.h3,
-    color: Colors.danger,
-  },
+  info: { gap: 4 },
+  eyebrow: { fontFamily: F.jakartaBold, fontSize: 10, lineHeight: 15, color: C.primary },
+  title: { fontFamily: F.jakartaExtraBold, fontSize: 25, lineHeight: 31.25, color: C.text },
+  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10 },
+  pill: { backgroundColor: '#DDF6E4', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  pillText: { fontFamily: F.jakartaBold, fontSize: 10, color: '#19874D' },
+  price: { fontFamily: F.jakartaBold, fontSize: 16, color: C.text },
+  description: { fontFamily: F.jakartaRegular, fontSize: 12, lineHeight: 20, color: C.textMuted2, paddingTop: 10 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F1F4', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 9 },
+  chipText: { fontFamily: F.jakartaBold, fontSize: 11, color: C.text },
+  card: { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border, padding: 16, gap: 12 },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardTitle: { flex: 1, fontFamily: F.jakartaBold, fontSize: 13, color: C.textStrong },
+  cardValue: { fontFamily: F.jakartaBold, fontSize: 13, color: C.primaryRing },
+  location: { fontFamily: F.jakartaSemiBold, fontSize: 12, lineHeight: 18, color: C.textStrong },
+  mapsBtn: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.softOrange, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
+  mapsText: { fontFamily: F.jakartaBold, fontSize: 12, color: C.primary },
 });

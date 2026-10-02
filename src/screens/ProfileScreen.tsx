@@ -1,310 +1,184 @@
-import React, { useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  Linking,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, Linking } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Colors, Spacing, Typography } from '../theme';
-import { ChefTip } from '../components/ChefTip';
+import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
-  User,
+  ChefHat,
+  ChevronRight,
   HelpCircle,
+  Landmark,
   LogOut,
-  ChevronRight
+  MapPin,
+  ShieldCheck,
+  User,
+  Wallet,
 } from 'lucide-react-native';
-import { useAuth } from '../context/AuthContext';
+import { C, F } from '../theme';
+import { FadeInView, InboxButton, PressableScale, ScreenHeader } from '../components/ui';
+import { getApplicationStatus, useAuth } from '../context/AuthContext';
 import { resolveImageSource } from '../utils/media';
 
+const SUPPORT_EMAIL = 'gohomeyybengaluru@gmail.com';
+
+type RowProps = {
+  Icon: any;
+  label: string;
+  caption?: string;
+  onPress?: () => void;
+  right?: React.ReactNode;
+  danger?: boolean;
+  delay: number;
+};
+
+/** White outlined row with a peach icon tile (Figma 76:13809). */
+const ProfileRow = ({ Icon, label, caption, onPress, right, danger, delay }: RowProps) => (
+  <FadeInView delay={delay}>
+    <PressableScale style={styles.row} onPress={onPress} disabled={!onPress} pressedScale={0.98}>
+      <View style={[styles.rowIcon, danger && { backgroundColor: C.dangerBg }]}>
+        <Icon size={16} color={danger ? C.danger : C.primaryRing} strokeWidth={1.67} />
+      </View>
+      <View style={styles.rowText}>
+        <Text style={[styles.rowLabel, danger && { color: C.danger }]}>{label}</Text>
+        {!!caption && (
+          <Text style={styles.rowCaption} numberOfLines={1}>
+            {caption}
+          </Text>
+        )}
+      </View>
+      {right ?? (onPress ? <ChevronRight size={16} color={C.iconMuted} strokeWidth={1.67} /> : null)}
+    </PressableScale>
+  </FadeInView>
+);
+
+const STATUS_PILL: Record<string, { text: string; bg: string; fg: string }> = {
+  APPROVED: { text: 'Verified', bg: C.successTint, fg: C.successDeep },
+  REJECTED: { text: 'Rejected', bg: C.dangerBg, fg: C.danger },
+};
+
+/** Private Chef Profile (Figma "Profile" 76:13780). */
 export const ProfileScreen = () => {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
-  const SUPPORT_EMAIL = 'gohomeyybengaluru@gmail.com';
+  const status = getApplicationStatus(user) ?? 'PENDING';
+  const pill = STATUS_PILL[status] ?? { text: 'In review', bg: C.warningTint, fg: C.warning };
+  const cover = resolveImageSource(user?.kitchen_photo_url);
+  const initial = (user?.name?.trim()?.[0] || 'C').toUpperCase();
+  const cuisine = user?.expertise?.length ? user.expertise.slice(0, 2).join(', ') : (user as any)?.primary_cuisine;
+  const tagline = [cuisine ? `${cuisine} home chef` : undefined, user?.kitchen_name]
+    .filter(Boolean)
+    .join(' · ');
+  const hasBank = !!user?.bank_account_number;
 
-  const handleHelpAndSupport = () => {
+  const openSupport = () =>
     Linking.openURL(
       `mailto:${SUPPORT_EMAIL}?subject=Chef App Support Request&body=Hi GoHomeyy Team,%0A%0AChef Name: ${user?.name || ''}%0APhone: ${user?.phone || ''}%0A%0APlease describe your issue below:%0A`
     );
-  };
-
-  useEffect(() => {
-    if (user) {
-      console.log('Chef Profile:', JSON.stringify(user, null, 2));
-    }
-  }, [user]);
-  const getImageUrl = (url?: string) => resolveImageSource(url) ?? undefined;
-
-  const menuItems = [
-    { id: '1', title: 'Profile', subtitle: 'Manage personal info & avatar', icon: User, color: Colors.primary },
-    { id: '3', title: 'Help & Support', subtitle: 'gohomeyybengaluru@gmail.com', icon: HelpCircle, color: Colors.cyan },
-  ];
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <View style={styles.headerTitleContainer}>
-        <Text style={styles.screenTitle}>GoHomeyy Chef</Text>
-      </View>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              {user?.kitchen_photo_url ? (
-                <Image
-                  source={getImageUrl(user.kitchen_photo_url)}
-                  style={styles.avatarImage}
-                />
-              ) : (
-                <User size={40} color={Colors.primary} />
-              )}
-            </View>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
+      <ScreenHeader
+        title="Private Chef Profile"
+        subtitle="GoHomeyy Chef"
+        onBack={() => navigation.goBack()}
+        right={<InboxButton onPress={() => navigation.navigate('Main', { screen: 'Dashboard', params: { screen: 'Orders' } })} />}
+      />
+
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]} showsVerticalScrollIndicator={false}>
+        {/* Cover + avatar */}
+        <FadeInView offset={0} fromScale={0.97} style={styles.coverWrap}>
+          <View style={styles.cover}>{cover && <Image source={cover} style={StyleSheet.absoluteFill} resizeMode="cover" />}</View>
+          <View style={styles.avatar}>
+            <LinearGradient colors={['#854B48', '#E6A375', '#644970']} start={{ x: 0.21, y: 0.09 }} end={{ x: 0.79, y: 0.91 }} style={StyleSheet.absoluteFill} />
+            <Text style={styles.avatarText}>{initial}</Text>
           </View>
-          <Text style={styles.chefName}>{user?.name || 'Chef'}</Text>
-          <Text style={styles.chefPhone}>{user?.phone || 'No phone number'}</Text>
-          {user?.kitchen_name && (
-            <Text style={styles.kitchenName}>{user.kitchen_name}</Text>
-          )}
-        </View>
+        </FadeInView>
 
-        {/* Bio Section */}
-        {user?.bio && (
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionHeader}>CHEF BIO</Text>
-            <View style={styles.cardContent}>
-              <Text style={styles.bioText}>{user.bio}</Text>
-            </View>
+        <FadeInView delay={80} style={styles.identity}>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>
+              {user?.name || 'Chef'}
+            </Text>
+            {status === 'APPROVED' && <ShieldCheck size={16} color={C.primaryRing} strokeWidth={1.67} />}
           </View>
-        )}
+          {!!tagline && <Text style={styles.tagline}>{tagline}</Text>}
+        </FadeInView>
 
-        {/* Expertise Section */}
-        {user?.expertise && user.expertise.length > 0 && (
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionHeader}>AREAS OF EXPERTISE</Text>
-            <View style={styles.tagContainer}>
-              {user.expertise.map((tag, index) => (
-                <View key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>{tag}</Text>
-                </View>
-              ))}
+        <ProfileRow delay={120} Icon={User} label="Chef information" caption={user?.email || user?.phone} onPress={() => navigation.navigate('EditProfile', { section: 'chef' })} />
+        <ProfileRow delay={160} Icon={ChefHat} label="Kitchen information" caption={user?.kitchen_name} onPress={() => navigation.navigate('EditProfile', { section: 'kitchen' })} />
+        <ProfileRow delay={200} Icon={MapPin} label="Service area" caption={user?.kitchen_address} onPress={() => navigation.navigate('EditProfile', { section: 'area' })} />
+        <ProfileRow
+          delay={240}
+          Icon={Landmark}
+          label="Bank details"
+          caption={hasBank ? `${user?.bank_name || 'Bank'} •••• ${String(user?.bank_account_number).slice(-4)}` : 'Add an account for payouts'}
+          onPress={() => navigation.navigate('EditProfile', { section: 'bank' })}
+        />
+        <ProfileRow delay={280} Icon={Wallet} label="Wallet" caption="Earnings & withdrawals" onPress={() => navigation.navigate('Wallet')} />
+        <ProfileRow
+          delay={320}
+          Icon={ShieldCheck}
+          label="Verification"
+          right={
+            <View style={[styles.pill, { backgroundColor: pill.bg }]}>
+              <Text style={[styles.pillText, { color: pill.fg }]}>{pill.text}</Text>
             </View>
-          </View>
-        )}
-
-        {/* Account Management */}
-        <Text style={styles.sectionHeader}>ACCOUNT MANAGEMENT</Text>
-        <View style={styles.menuContainer}>
-          {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.menuItem}
-              onPress={() => {
-                if (item.title === 'Profile') navigation.navigate('EditProfile');
-                if (item.title === 'Help & Support') handleHelpAndSupport();
-              }}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: `${item.color}20` }]}>
-                <item.icon size={20} color={item.color} />
-              </View>
-              <View style={styles.menuInfo}>
-                <Text style={styles.menuTitle}>{item.title}</Text>
-                <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
-              </View>
-              <ChevronRight size={20} color={Colors.textSecondary} />
-            </TouchableOpacity>
-          ))}
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('Logout')}
-          >
-            <View style={[styles.menuIcon, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
-              <LogOut size={20} color={Colors.danger} />
-            </View>
-            <View style={styles.menuInfo}>
-              <Text style={[styles.menuTitle, { color: Colors.danger }]}>Logout</Text>
-              <Text style={styles.menuSubtitle}>Securely sign out of session</Text>
-            </View>
-            <ChevronRight size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        <ChefTip tip="Need help? Email us at gohomeyybengaluru@gmail.com — our team responds within 24 hours on working days." />
-
-        <View style={styles.footer}>
-          <Text style={styles.versionText}>GOHOMEYY CHEF V2.4.1</Text>
-          <TouchableOpacity onPress={handleHelpAndSupport} style={styles.contactRow}>
-            <HelpCircle size={12} color={Colors.cyan} />
-            <Text style={styles.contactEmail}>gohomeyybengaluru@gmail.com</Text>
-          </TouchableOpacity>
-        </View>
+          }
+        />
+        <ProfileRow delay={360} Icon={HelpCircle} label="Help & support" caption={SUPPORT_EMAIL} onPress={openSupport} />
+        <ProfileRow delay={400} Icon={LogOut} label="Log out" danger onPress={() => navigation.navigate('Logout')} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollContent: {
-    padding: Spacing.md,
-    paddingBottom: 40,
-  },
-  headerTitleContainer: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  screenTitle: {
-    ...Typography.h1,
-  },
-  profileCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 24,
-    padding: Spacing.xl,
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  avatarContainer: {
-    marginBottom: Spacing.md,
-    alignItems: 'center',
+  root: { flex: 1, backgroundColor: C.bg },
+  content: { paddingHorizontal: 20, gap: 16 },
+  coverWrap: { marginBottom: 32 },
+  cover: {
+    height: 144,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F2',
+    overflow: 'hidden',
   },
   avatar: {
+    position: 'absolute',
+    left: 20,
+    bottom: -32,
     width: 80,
     height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
+    borderRadius: 22,
+    borderWidth: 4,
+    borderColor: C.white,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    overflow: 'hidden',
+    backgroundColor: '#F0F0F2',
   },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-
-  chefName: {
-    ...Typography.h2,
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  chefPhone: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-  kitchenName: {
-    ...Typography.body,
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: 'bold',
-  },
-  sectionHeader: {
-    ...Typography.caption,
-    fontSize: 10,
-    color: Colors.textSecondary,
-    fontWeight: 'bold',
-    marginBottom: Spacing.sm,
-    paddingLeft: Spacing.xs,
-  },
-  menuContainer: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Spacing.xl,
-  },
-  menuItem: {
+  avatarText: { fontFamily: F.jakartaBold, fontSize: 28, color: C.white },
+  identity: { gap: 0 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  name: { flexShrink: 1, fontFamily: F.jakartaBold, fontSize: 20, lineHeight: 30, color: C.textStrong },
+  tagline: { fontFamily: F.jakartaRegular, fontSize: 11, lineHeight: 16.5, color: C.textMuted },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.md,
-    borderBottomWidth: 1,
-    borderColor: Colors.border,
-  },
-  menuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.md,
-  },
-  menuInfo: {
-    flex: 1,
-  },
-  menuTitle: {
-    ...Typography.body,
-    fontWeight: 'bold',
-  },
-  menuSubtitle: {
-    ...Typography.caption,
-    fontSize: 10,
-  },
-  footer: {
-    alignItems: 'center',
-    marginTop: Spacing.md,
-    gap: 8,
-  },
-  versionText: {
-    ...Typography.caption,
-    fontSize: 10,
-    color: Colors.textSecondary,
-    letterSpacing: 1,
-  },
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  contactEmail: {
-    color: Colors.cyan,
-    fontSize: 12,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
-  },
-  sectionContainer: {
-    marginBottom: Spacing.xl,
-  },
-  cardContent: {
-    backgroundColor: Colors.surface,
-    padding: Spacing.md,
-    borderRadius: 16,
+    gap: 12,
+    padding: 12,
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
+    backgroundColor: C.surface,
   },
-  bioText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    lineHeight: 20,
-  },
-  tagContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  tag: {
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(74, 222, 128, 0.3)',
-  },
-  tagText: {
-    ...Typography.caption,
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: 'bold',
-  },
+  rowIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#FFEFE5', alignItems: 'center', justifyContent: 'center' },
+  rowText: { flex: 1 },
+  rowLabel: { fontFamily: F.jakartaBold, fontSize: 11, lineHeight: 16.5, color: C.textStrong },
+  rowCaption: { fontFamily: F.jakartaRegular, fontSize: 9, lineHeight: 13.5, color: C.iconMuted },
+  pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  pillText: { fontFamily: F.jakartaBold, fontSize: 10.5, lineHeight: 15.75 },
 });

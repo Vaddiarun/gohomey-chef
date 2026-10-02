@@ -1,88 +1,88 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Spacing, Typography } from '../theme';
-import {
-  ChevronLeft,
-  User,
-  Mail,
-  MapPin,
-  Utensils,
-  FileText,
-  Building2,
-  CreditCard,
-  Landmark,
-  Check,
-} from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { Building2, CreditCard, Landmark, Mail, MapPin, User, Utensils } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
+import { C, F, Radius } from '../theme';
+import { FadeInView, FormField, PrimaryButton, ScreenHeader } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
+import { KeyboardAware } from '../components/ui/KeyboardAware';
 
-export const EditProfileScreen = ({ navigation }: any) => {
+type Section = 'chef' | 'kitchen' | 'area' | 'bank' | 'all';
+
+const TITLES: Record<Section, { title: string; subtitle: string }> = {
+  chef: { title: 'Chef information', subtitle: 'How diners see you' },
+  kitchen: { title: 'Kitchen information', subtitle: 'Your kitchen on GoHomeyy' },
+  area: { title: 'Service area', subtitle: 'Where you cook from' },
+  bank: { title: 'Bank details', subtitle: 'Where your payouts go' },
+  all: { title: 'Edit profile', subtitle: 'GoHomeyy Chef' },
+};
+
+const icon = (Icon: any) => <Icon size={16} color={C.iconMuted} strokeWidth={1.33} />;
+
+/** Profile editor in the new design; Profile rows open one section each. */
+export const EditProfileScreen = ({ navigation, route }: any) => {
+  const section: Section = route?.params?.section ?? 'all';
+  const show = (s: Section) => section === 'all' || section === s;
   const { user, updateProfile } = useAuth();
+  const insets = useSafeAreaInsets();
   const [saving, setSaving] = useState(false);
 
-  // Personal
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [bio, setBio] = useState('');
-
-  // Kitchen
   const [kitchenName, setKitchenName] = useState('');
   const [kitchenAddress, setKitchenAddress] = useState('');
-
-  // Bank
   const [bankHolderName, setBankHolderName] = useState('');
   const [bankName, setBankName] = useState('');
   const [bankAccount, setBankAccount] = useState('');
   const [ifscCode, setIfscCode] = useState('');
 
   useEffect(() => {
-    if (user) {
-      setFullName(user.name || '');
-      setEmail(user.email || '');
-      setBio(user.bio || '');
-      setKitchenName(user.kitchen_name || '');
-      setKitchenAddress(user.kitchen_address || '');
-      setBankHolderName(user.bank_holder_name || '');
-      setBankName(user.bank_name || '');
-      setBankAccount(user.bank_account_number || '');
-      setIfscCode(user.ifsc_code || '');
-    }
+    if (!user) return;
+    setFullName(user.name || '');
+    setEmail(user.email || '');
+    setBio(user.bio || '');
+    setKitchenName(user.kitchen_name || '');
+    setKitchenAddress(user.kitchen_address || '');
+    setBankHolderName(user.bank_holder_name || '');
+    setBankName(user.bank_name || '');
+    setBankAccount(user.bank_account_number || '');
+    setIfscCode(user.ifsc_code || '');
   }, [user]);
 
   const handleSave = async () => {
-    if (!fullName.trim()) {
-      Toast.show({ type: 'error', text1: 'Required', text2: 'Name is required' });
-      return;
+    const data: Record<string, string> = {};
+    if (show('chef')) {
+      if (!fullName.trim()) {
+        Toast.show({ type: 'error', text1: 'Required', text2: 'Name is required' });
+        return;
+      }
+      Object.assign(data, { name: fullName.trim(), email: email.trim(), bio: bio.trim() });
     }
-    setSaving(true);
-    try {
-      const success = await updateProfile({
-        name: fullName.trim(),
-        email: email.trim(),
-        bio: bio.trim(),
-        kitchen_name: kitchenName.trim(),
-        kitchen_address: kitchenAddress.trim(),
+    if (show('kitchen')) data.kitchen_name = kitchenName.trim();
+    if (show('kitchen') || show('area')) data.kitchen_address = kitchenAddress.trim();
+    if (show('bank')) {
+      if (ifscCode.trim() && !/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(ifscCode.trim())) {
+        Toast.show({ type: 'error', text1: 'IFSC code', text2: 'Enter a valid 11-character IFSC code.' });
+        return;
+      }
+      Object.assign(data, {
         bank_holder_name: bankHolderName.trim(),
         bank_name: bankName.trim(),
         bank_account_number: bankAccount.trim(),
         ifsc_code: ifscCode.trim().toUpperCase(),
       });
+    }
+    setSaving(true);
+    try {
+      const success = await updateProfile(data);
       if (success) {
         Toast.show({ type: 'success', text1: 'Saved', text2: 'Profile updated successfully' });
         navigation.goBack();
       } else {
-        Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to update profile' });
+        Toast.show({ type: 'error', text1: 'Could not save', text2: 'Check your internet connection and try again.' });
       }
     } catch {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Something went wrong' });
@@ -91,297 +91,107 @@ export const EditProfileScreen = ({ navigation }: any) => {
     }
   };
 
-  const renderField = (
-    label: string,
-    value: string,
-    onChange: (v: string) => void,
-    Icon: any,
-    options?: { placeholder?: string; multiline?: boolean; keyboardType?: any; autoCapitalize?: any }
-  ) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={[styles.inputWrapper, options?.multiline && styles.multilineWrapper]}>
-        <Icon size={18} color={Colors.primary} style={options?.multiline ? styles.multilineIcon : styles.inputIcon} />
-        <TextInput
-          style={[styles.input, options?.multiline && styles.multilineInput]}
-          value={value}
-          onChangeText={onChange}
-          placeholder={options?.placeholder || ''}
-          placeholderTextColor={Colors.textSecondary}
-          multiline={options?.multiline}
-          numberOfLines={options?.multiline ? 4 : 1}
-          keyboardType={options?.keyboardType || 'default'}
-          autoCapitalize={options?.autoCapitalize || 'sentences'}
-        />
-      </View>
-    </View>
-  );
+  const head = TITLES[section] ?? TITLES.all;
+  let delay = 0;
+  const next = () => (delay += 50);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ChevronLeft size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Profile</Text>
-        <TouchableOpacity onPress={handleSave} disabled={saving} style={styles.saveBtn}>
-          {saving ? (
-            <ActivityIndicator size="small" color={Colors.primary} />
-          ) : (
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
+      <ScreenHeader title={head.title} subtitle={head.subtitle} onBack={() => navigation.goBack()} />
+
+      <KeyboardAware style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          {show('chef') && (
             <>
-              <Check size={16} color={Colors.background} />
-              <Text style={styles.saveBtnText}>Save</Text>
+              {section === 'all' && <Text style={styles.eyebrow}>PERSONAL INFORMATION</Text>}
+              <FadeInView delay={next()}>
+                <FormField label="Full name" value={fullName} onChangeText={setFullName} placeholder="Your full name" autoCapitalize="words" icon={icon(User)} />
+              </FadeInView>
+              <FadeInView delay={next()}>
+                <FormField label="Email" value={email} onChangeText={setEmail} placeholder="chef@example.com" keyboardType="email-address" autoCapitalize="none" icon={icon(Mail)} />
+              </FadeInView>
+              <FadeInView delay={next()} style={styles.group}>
+                <Text style={styles.label}>Bio</Text>
+                <TextInput
+                  value={bio}
+                  onChangeText={setBio}
+                  placeholder="Tell diners about your culinary journey…"
+                  placeholderTextColor={C.iconMuted}
+                  multiline
+                  textAlignVertical="top"
+                  style={styles.textArea}
+                />
+              </FadeInView>
             </>
           )}
-        </TouchableOpacity>
-      </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
-          {/* Avatar */}
-          <View style={styles.avatarSection}>
-            <View style={styles.avatarWrapper}>
-              <View style={styles.avatarCircle}>
-                <User size={48} color={Colors.primary} />
-              </View>
-            </View>
-            <Text style={styles.chefName}>{fullName || 'Chef'}</Text>
-            {kitchenName ? <Text style={styles.chefSubtitle}>{kitchenName}</Text> : null}
-          </View>
+          {show('kitchen') && (
+            <>
+              {section === 'all' && <Text style={styles.eyebrow}>KITCHEN DETAILS</Text>}
+              <FadeInView delay={next()}>
+                <FormField label="Kitchen name" value={kitchenName} onChangeText={setKitchenName} placeholder="e.g. Amma’s Kitchen" autoCapitalize="words" icon={icon(Utensils)} />
+              </FadeInView>
+            </>
+          )}
 
-          {/* Personal Info Section */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionDot} />
-              <Text style={styles.sectionLabel}>PERSONAL INFORMATION</Text>
-            </View>
-            {renderField('FULL NAME', fullName, setFullName, User, { placeholder: 'Your full name' })}
-            {renderField('EMAIL', email, setEmail, Mail, { placeholder: 'chef@example.com', keyboardType: 'email-address', autoCapitalize: 'none' })}
-            {renderField('BIO', bio, setBio, FileText, { placeholder: 'Tell diners about your culinary journey...', multiline: true })}
-          </View>
+          {(show('kitchen') || show('area')) && (
+            <FadeInView delay={next()}>
+              <FormField label="Kitchen address" value={kitchenAddress} onChangeText={setKitchenAddress} placeholder="Full kitchen address" icon={icon(MapPin)} />
+            </FadeInView>
+          )}
 
-          {/* Kitchen Section */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionDot, { backgroundColor: Colors.cyan }]} />
-              <Text style={styles.sectionLabel}>KITCHEN DETAILS</Text>
-            </View>
-            {renderField('KITCHEN NAME', kitchenName, setKitchenName, Utensils, { placeholder: 'e.g. The Emerald Atelier' })}
-            {renderField('KITCHEN ADDRESS', kitchenAddress, setKitchenAddress, MapPin, { placeholder: 'Full kitchen address' })}
-          </View>
-
-          {/* Bank Details Section */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionDot, { backgroundColor: '#A78BFA' }]} />
-              <Text style={styles.sectionLabel}>BANK DETAILS</Text>
-            </View>
-            <View style={styles.bankNotice}>
-              <Landmark size={14} color={Colors.warning} />
-              <Text style={styles.bankNoticeText}>Accurate bank details ensure timely payouts every Friday.</Text>
-            </View>
-            {renderField('ACCOUNT HOLDER NAME', bankHolderName, setBankHolderName, User, { placeholder: 'Name as per bank account' })}
-            {renderField('BANK NAME', bankName, setBankName, Building2, { placeholder: 'e.g. State Bank of India' })}
-            {renderField('ACCOUNT NUMBER', bankAccount, setBankAccount, CreditCard, { placeholder: 'Your bank account number', keyboardType: 'numeric' })}
-            {renderField('IFSC CODE', ifscCode, setIfscCode, Landmark, { placeholder: 'e.g. SBIN0001234', autoCapitalize: 'characters' })}
-          </View>
-
-          {/* Save Button */}
-          <TouchableOpacity
-            style={[styles.saveFullBtn, saving && { opacity: 0.7 }]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator color={Colors.background} />
-            ) : (
-              <Text style={styles.saveFullBtnText}>Save Changes</Text>
-            )}
-          </TouchableOpacity>
-
-          <View style={{ height: 40 }} />
+          {show('bank') && (
+            <>
+              {section === 'all' && <Text style={styles.eyebrow}>BANK DETAILS</Text>}
+              <FadeInView delay={next()} style={styles.notice}>
+                <Landmark size={14} color={C.primaryRing} strokeWidth={1.67} />
+                <Text style={styles.noticeText}>Accurate bank details ensure your payouts arrive on time.</Text>
+              </FadeInView>
+              <FadeInView delay={next()}>
+                <FormField label="Account holder name" value={bankHolderName} onChangeText={setBankHolderName} placeholder="Name as per bank account" autoCapitalize="words" icon={icon(User)} />
+              </FadeInView>
+              <FadeInView delay={next()}>
+                <FormField label="Bank name" value={bankName} onChangeText={setBankName} placeholder="e.g. State Bank of India" autoCapitalize="words" icon={icon(Building2)} />
+              </FadeInView>
+              <FadeInView delay={next()}>
+                <FormField label="Account number" value={bankAccount} onChangeText={(v) => setBankAccount(v.replace(/\D/g, ''))} placeholder="Your bank account number" keyboardType="number-pad" icon={icon(CreditCard)} />
+              </FadeInView>
+              <FadeInView delay={next()}>
+                <FormField label="IFSC code" value={ifscCode} onChangeText={(v) => setIfscCode(v.toUpperCase())} placeholder="e.g. SBIN0001234" autoCapitalize="characters" maxLength={11} icon={icon(Landmark)} />
+              </FadeInView>
+            </>
+          )}
         </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+          <PrimaryButton label="Save" showChevron={false} onPress={handleSave} loading={saving} />
+        </View>
+      </KeyboardAware>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    ...Typography.h2,
-    flex: 1,
-    textAlign: 'center',
-  },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 4,
-  },
-  saveBtnText: {
-    color: Colors.background,
-    fontWeight: 'bold',
+  root: { flex: 1, backgroundColor: C.bg },
+  flex: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingBottom: 32, gap: 14 },
+  eyebrow: { marginTop: 6, fontFamily: F.jakartaBold, fontSize: 10, lineHeight: 15, letterSpacing: 0.5, color: C.primaryRing },
+  group: { gap: 6 },
+  label: { fontFamily: F.jakartaBold, fontSize: 11, lineHeight: 16.5, color: C.textMuted },
+  textArea: {
+    minHeight: 110,
+    borderRadius: Radius.field,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontFamily: F.jakartaSemiBold,
     fontSize: 13,
+    color: C.textStrong,
   },
-  container: { flex: 1 },
-  contentContainer: {
-    padding: Spacing.lg,
-  },
-  // Avatar
-  avatarSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  avatarWrapper: {
-    position: 'relative',
-    marginBottom: Spacing.sm,
-  },
-  avatarCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.surface,
-    borderWidth: 3,
-    borderColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chefName: {
-    ...Typography.h2,
-    marginTop: 4,
-  },
-  chefSubtitle: {
-    ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: 'bold',
-    marginTop: 2,
-  },
-  // Sections
-  sectionContainer: {
-    marginBottom: 28,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.primary,
-    marginRight: 8,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: Colors.textSecondary,
-    letterSpacing: 1.5,
-  },
-  // Fields
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: Colors.textSecondary,
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 52,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  multilineWrapper: {
-    height: 110,
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  multilineIcon: {
-    marginRight: 10,
-    marginTop: 2,
-  },
-  input: {
-    flex: 1,
-    ...Typography.body,
-    color: Colors.text,
-    fontSize: 14,
-  },
-  multilineInput: {
-    textAlignVertical: 'top',
-    height: '100%',
-  },
-  // Bank notice
-  bankNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(250, 204, 21, 0.08)',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(250, 204, 21, 0.2)',
-    gap: 8,
-  },
-  bankNoticeText: {
-    ...Typography.caption,
-    color: Colors.warning,
-    flex: 1,
-    fontSize: 11,
-  },
-  // Save button
-  saveFullBtn: {
-    backgroundColor: Colors.primary,
-    height: 54,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  saveFullBtnText: {
-    color: Colors.background,
-    fontWeight: 'bold',
-    fontSize: 16,
-    letterSpacing: 0.5,
-  },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, backgroundColor: 'rgba(252,65,0,0.04)' },
+  noticeText: { flex: 1, fontFamily: F.jakartaSemiBold, fontSize: 11, lineHeight: 16, color: C.textMuted },
+  footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: C.bg },
 });

@@ -1,82 +1,19 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-  Switch,
-  Modal,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Colors, Spacing, Typography } from '../theme';
-import { useAuth } from '../context/AuthContext';
-import {
-  Zap,
-  Clock,
-  Users,
-  ChevronRight,
-  AlertCircle,
-  Play,
-  Camera,
-  Check,
-  X,
-  MapPin,
-  Utensils,
-  Wifi,
-  WifiOff,
-  Phone,
-  PackageCheck,
-  Truck,
-} from 'lucide-react-native';
+import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
+import { AlertCircle, ChevronRight, Leaf, Power } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
 import { format } from 'date-fns';
-
-interface Fulfillment {
-  id: string;
-  fulfillment_date: string;
-  delivery_time_slot: string;
-  delivery_status: string;
-  menu: {
-    day_number: number;
-    period: 'breakfast' | 'lunch' | 'dinner' | null;
-    item_name: string | null;
-    time_slot: string;
-    nutrition?: { calories: number; protein: number; carbs: number; fat: number };
-  } | null;
-  subscription: {
-    user: { name: string; phone: string };
-    plan: { name: string };
-  };
-}
-
-interface Subscriber {
-  id: string;
-  plan: { id: string; name: string; price?: number };
-  user: { id: string; name: string; phone: string };
-  delivery_days?: string[];
-  status?: string;
-}
-
-interface FuelPlan {
-  id: string;
-  name: string;
-  price: number;
-  delivery_time_slots?: string[];
-  is_enabled_for_chef?: boolean;
-  chef_slots?: Array<{ id?: string; time_slot: string }>;
-}
-
-interface FuelChefSlot {
-  id?: string;
-  plan_id?: string;
-  planId?: string;
-  time_slot: string;
-  plan?: { id: string; name?: string };
-}
+import { useAuth } from '../context/AuthContext';
+import { C, F } from '../theme';
+import { FadeInView, KitchenHeader, PressableScale, Toggle } from '../components/ui';
+import { FUEL, FuelNowOfferModal, FuelPlanCard, FulfillmentCard, SectionLoader, SubscriberRow } from '../components/FuelParts';
+import { useTabBarSpace } from '../navigation/FloatingTabBar';
+import { fmt12, FuelChefSlot, FuelPlan, FuelSubscriber, Fulfillment, isPlanEnabled } from '../utils/fuel';
+import { errorText } from '../utils/apiErrors';
 
 interface FuelNowOffer {
   session_id: string;
@@ -88,22 +25,13 @@ interface FuelNowOffer {
   chef: { id: string; distance: number };
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  SCHEDULED: { label: 'Scheduled', color: Colors.cyan, bg: 'rgba(34, 211, 238, 0.1)' },
-  COOKING: { label: 'Cooking', color: Colors.warning, bg: 'rgba(250, 204, 21, 0.1)' },
-  READY_FOR_PICKUP: { label: 'Ready for pickup', color: Colors.primary, bg: 'rgba(74, 222, 128, 0.1)' },
-  PICKED_UP: { label: 'Picked up', color: Colors.primary, bg: 'rgba(74, 222, 128, 0.08)' },
-  DELIVERED: { label: 'Delivered', color: Colors.primary, bg: 'rgba(74, 222, 128, 0.08)' },
-  PAUSED: { label: 'Paused', color: Colors.textSecondary, bg: 'rgba(156, 163, 175, 0.1)' },
-  MISSED: { label: 'Missed', color: Colors.danger, bg: 'rgba(239, 68, 68, 0.1)' },
-  CANCELLED: { label: 'Cancelled', color: Colors.danger, bg: 'rgba(239, 68, 68, 0.1)' },
-};
-
-const getFuelSlotPlanId = (slot: FuelChefSlot) => slot.plan_id || slot.planId || slot.plan?.id;
+const SUBSCRIBER_PREVIEW = 3;
 
 export const FuelDashboardScreen = () => {
   const navigation = useNavigation<any>();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const bottomSpace = useTabBarSpace();
   const today = format(new Date(), 'yyyy-MM-dd');
 
   const [fulfillments, setFulfillments] = useState<Fulfillment[]>([]);
@@ -116,7 +44,7 @@ export const FuelDashboardScreen = () => {
   const [countdown, setCountdown] = useState(120);
   const [respondingOffer, setRespondingOffer] = useState(false);
 
-  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+  const [subscribers, setSubscribers] = useState<FuelSubscriber[]>([]);
   const [loadingSubscribers, setLoadingSubscribers] = useState(true);
   const [plans, setPlans] = useState<FuelPlan[]>([]);
   const [enabledSlots, setEnabledSlots] = useState<FuelChefSlot[]>([]);
@@ -183,7 +111,7 @@ export const FuelDashboardScreen = () => {
       Toast.show({ type: 'success', text1: 'Fuel plan enabled' });
       await Promise.all([fetchPlans(), fetchEnabledSlots()]);
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Enable failed', text2: err.message || 'Please try again.' });
+      Toast.show({ type: 'error', text1: 'Enable failed', text2: errorText(err, 'Please try again.') });
     } finally {
       setEnablingPlanId(null);
     }
@@ -411,849 +339,259 @@ export const FuelDashboardScreen = () => {
     acc[slot].push(f);
     return acc;
   }, {});
-
   const sortedSlots = Object.keys(grouped).sort();
-  const enabledPlanCount = plans.filter(
-    plan => plan.is_enabled_for_chef || enabledSlots.some(slot => getFuelSlotPlanId(slot) === plan.id)
-  ).length;
 
-  const stats = {
-    total: fulfillments.length,
-    cooking: fulfillments.filter(f => f.delivery_status === 'COOKING').length,
-    ready: fulfillments.filter(f => f.delivery_status === 'READY_FOR_PICKUP').length,
-  };
+  const activePlans = plans.filter((plan) => isPlanEnabled(plan, enabledSlots));
+  const availablePlans = plans.filter((plan) => !isPlanEnabled(plan, enabledSlots));
+  const activeSubscribers = subscribers.filter((s) => (s.status ?? 'ACTIVE') === 'ACTIVE');
+  const kitchenName = user?.kitchen_name || (user?.name ? `${user.name.split(' ')[0]}’s Kitchen` : 'My Kitchen');
 
-  const fmt12 = (slot: string) => {
-    if (!slot || slot === 'Unscheduled') return 'Unscheduled';
-    const [h, m] = slot.split(':').map(Number);
-    if (isNaN(h)) return slot;
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h % 12 || 12;
-    return `${h12}:${String(m ?? 0).padStart(2, '0')} ${ampm}`;
+  const openPlan = (plan: FuelPlan) =>
+    navigation.navigate('FuelPlanDetail', {
+      plan,
+      enabled: isPlanEnabled(plan, enabledSlots),
+      subscriberCount: subscribers.filter((s) => s.plan?.id === plan.id).length,
+    });
+
+  const onRefresh = () => {
+    fetchPlans();
+    fetchEnabledSlots();
+    fetchSubscribers();
+    fetchFulfillments(true);
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      {/* Fuel NOW Offer Modal */}
-      <Modal visible={!!currentOffer} transparent animationType="fade">
-        <View style={styles.offerOverlay}>
-          <View style={styles.offerCard}>
-            <View style={styles.offerHeader}>
-              <View style={styles.offerIconWrap}>
-                <Zap size={28} color={Colors.warning} />
-              </View>
-              <Text style={styles.offerTitle}>Fuel NOW Request</Text>
-              <Text style={styles.offerSubtitle}>Instant order incoming</Text>
-            </View>
+    <View style={styles.root}>
+      <StatusBar style="dark" />
+      <FuelNowOfferModal offer={currentOffer} countdown={countdown} responding={respondingOffer} onRespond={handleRespondOffer} />
 
-            <View style={styles.countdownWrap}>
-              <Text
-                style={[
-                  styles.countdownNum,
-                  countdown <= 30 && { color: Colors.danger },
-                ]}
-              >
-                {countdown}
-              </Text>
-              <Text style={styles.countdownLabel}>seconds to decide</Text>
-            </View>
-
-            {currentOffer && (
-              <View style={styles.offerDetails}>
-                <View style={styles.offerRow}>
-                  <Utensils size={14} color={Colors.textSecondary} />
-                  <Text style={styles.offerRowText}>{currentOffer.item_name}</Text>
-                </View>
-                {currentOffer.chef?.distance != null && (
-                  <View style={styles.offerRow}>
-                    <MapPin size={14} color={Colors.textSecondary} />
-                    <Text style={styles.offerRowText}>
-                      {currentOffer.chef.distance.toFixed(2)} km away
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-
-            <View style={styles.offerActions}>
-              <TouchableOpacity
-                style={styles.declineBtn}
-                onPress={() => handleRespondOffer(false)}
-                disabled={respondingOffer}
-              >
-                <X size={16} color={Colors.danger} />
-                <Text style={styles.declineBtnText}>Decline</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.acceptBtn}
-                onPress={() => handleRespondOffer(true)}
-                disabled={respondingOffer}
-              >
-                {respondingOffer ? (
-                  <ActivityIndicator color={Colors.background} size="small" />
-                ) : (
-                  <>
-                    <Check size={16} color={Colors.background} />
-                    <Text style={styles.acceptBtnText}>Accept</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <View style={[styles.headerWrap, { paddingTop: insets.top }]}>
+        <KitchenHeader
+          kitchenName={kitchenName}
+          ownerName={user?.name}
+          onInbox={() => navigation.navigate('FuelSubscribers')}
+          onProfile={() => navigation.navigate('Profile')}
+        />
+      </View>
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              fetchPlans();
-              fetchEnabledSlots();
-              fetchSubscribers();
-              fetchFulfillments(true);
-            }}
-            tintColor={Colors.primary}
-          />
-        }
+        contentContainerStyle={[styles.content, { paddingBottom: bottomSpace + 24 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primary]} />}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.screenTitle}>Fuel Kitchen</Text>
-            <Text style={styles.dateLabel}>{format(new Date(), 'EEEE, MMM d')}</Text>
-          </View>
-          <View style={styles.headerIconWrap}>
-            <Zap size={22} color={Colors.warning} />
-          </View>
-        </View>
-
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNum}>{stats.total}</Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </View>
-          <View style={[styles.statCard, styles.statMiddle]}>
-            <Text style={[styles.statNum, { color: Colors.warning }]}>{stats.cooking}</Text>
-            <Text style={styles.statLabel}>Cooking</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={[styles.statNum, { color: Colors.primary }]}>{stats.ready}</Text>
-            <Text style={styles.statLabel}>Ready</Text>
-          </View>
-        </View>
-
-        {/* Fuel NOW Card */}
-        <View style={[styles.nowCard, isOnline && styles.nowCardActive]}>
-          <View style={styles.nowLeft}>
-            <View style={[styles.nowIconWrap, isOnline && styles.nowIconActive]}>
-              {isOnline ? (
-                <Wifi size={18} color={Colors.primary} />
-              ) : (
-                <WifiOff size={18} color={Colors.textSecondary} />
-              )}
+        {/* Impact */}
+        <FadeInView>
+          <LinearGradient colors={['#FC4100', '#FB8122', '#E64611']} start={{ x: 0, y: 0.2 }} end={{ x: 1, y: 0.8 }} style={styles.impact}>
+            <View style={styles.leaf}>
+              <Leaf size={82} color="rgba(255,255,255,0.25)" strokeWidth={1.4} />
             </View>
-            <View>
-              <Text style={styles.nowTitle}>Fuel NOW</Text>
-              <Text style={styles.nowSub}>
-                {isOnline ? 'Online — receiving instant orders' : 'Tap to go online'}
-              </Text>
+            <Text style={styles.impactTitle}>YOUR FUEL IMPACT</Text>
+            <View style={styles.impactRow}>
+              {[
+                { value: subscribers.length, label: 'Total Subscribers' },
+                { value: fulfillments.length, label: 'Meals Today' },
+                { value: activePlans.length, label: 'Active Plans' },
+              ].map((s, i) => (
+                <View key={s.label} style={[styles.impactCell, i < 2 && styles.impactDivider, i > 0 && { paddingLeft: 12 }]}>
+                  <Text style={styles.impactValue}>{s.value}</Text>
+                  <Text style={styles.impactLabel}>{s.label}</Text>
+                </View>
+              ))}
             </View>
-          </View>
-          <Switch
-            value={isOnline}
-            onValueChange={setIsOnline}
-            trackColor={{ false: Colors.border, true: 'rgba(74, 222, 128, 0.35)' }}
-            thumbColor={isOnline ? Colors.primary : Colors.textSecondary}
-          />
-        </View>
+          </LinearGradient>
+        </FadeInView>
 
-        {/* Fuel Plans Section */}
-        <View style={styles.plansSection}>
-          <View style={styles.plansSectionHeader}>
-            <Zap size={15} color={Colors.warning} />
-            <Text style={styles.plansSectionTitle}>
-              Fuel Plans{plans.length > 0 ? ` (${enabledPlanCount}/${plans.length} enabled)` : ''}
-            </Text>
+        {/* Fuel Now */}
+        <FadeInView delay={70} style={styles.nowCard}>
+          <View style={styles.nowIcon}>
+            <Power size={18} color={FUEL.primary} strokeWidth={1.5} />
           </View>
+          <View style={styles.flex}>
+            <Text style={styles.nowTitle}>Fuel Now</Text>
+            <Text style={styles.nowSub}>{isOnline ? 'Online — receiving instant Fuel orders' : 'Go online and start fulfilling Fuel orders'}</Text>
+          </View>
+          <Text style={styles.nowState}>{isOnline ? 'ON' : 'OFF'}</Text>
+          <Toggle value={isOnline} onValueChange={setIsOnline} activeColor="#E64611" />
+        </FadeInView>
 
+        {/* Today's deliveries (existing fulfilment flow) */}
+        {(loading || fulfillments.length > 0 || !!error) && (
+          <FadeInView delay={110} style={styles.section}>
+            <View style={styles.sectionHead}>
+              <Text style={styles.h2}>Today's Fuel Deliveries</Text>
+              <Text style={styles.sub}>{format(new Date(), 'EEEE, d MMM')}</Text>
+            </View>
+            {loading && !refreshing ? (
+              <SectionLoader />
+            ) : error ? (
+              <Pressable onPress={() => fetchFulfillments()} style={styles.errorRow}>
+                <AlertCircle size={14} color={C.danger} />
+                <Text style={styles.errorText}>Could not load today's deliveries. Tap to retry.</Text>
+              </Pressable>
+            ) : (
+              sortedSlots.map((slot) => (
+                <View key={slot} style={styles.slotGroup}>
+                  <Text style={styles.slotTime}>
+                    {fmt12(slot) || 'Unscheduled'} · {grouped[slot].length}
+                  </Text>
+                  {grouped[slot].map((item) => (
+                    <FulfillmentCard
+                      key={item.id}
+                      item={item}
+                      onStatus={(status) => handleStatusUpdate(item.id, status)}
+                      onWeighIn={() => navigation.navigate('FuelWeighIn', { fulfillmentId: item.id, itemName: item.menu?.item_name })}
+                    />
+                  ))}
+                </View>
+              ))
+            )}
+          </FadeInView>
+        )}
+
+        {/* Available plans */}
+        <FadeInView delay={150} style={styles.section}>
+          <View style={styles.sectionHead}>
+            <Text style={styles.h2}>Available Fuel Plans</Text>
+            <Text style={styles.sub}>GoHomeyy-managed plans for your kitchen</Text>
+          </View>
           {loadingPlans ? (
-            <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: Spacing.sm }} />
-          ) : plans.length === 0 ? (
-            <Text style={styles.subsEmpty}>No Fuel plans available yet.</Text>
+            <SectionLoader />
+          ) : availablePlans.length === 0 ? (
+            <Text style={styles.empty}>{plans.length ? 'You have accepted every available plan.' : 'No Fuel plans available yet.'}</Text>
           ) : (
-            plans.map(plan => {
-              const enabledPlanSlots = enabledSlots.filter(slot => getFuelSlotPlanId(slot) === plan.id);
-              const enabled = !!plan.is_enabled_for_chef || enabledPlanSlots.length > 0;
-              const slots = enabledPlanSlots.length
-                ? enabledPlanSlots.map(slot => slot.time_slot)
-                : enabled && plan.chef_slots?.length
-                ? plan.chef_slots.map(slot => slot.time_slot)
-                : plan.delivery_time_slots ?? [];
-
-              return (
-                <TouchableOpacity
-                  key={plan.id}
-                  style={styles.planRow}
-                  activeOpacity={0.7}
-                  onPress={() =>
-                    navigation.navigate('FuelPlanDetail', { plan, enabled, slots })
-                  }
-                >
-                  <View style={styles.planRowTop}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.fuelPlanName}>{plan.name}</Text>
-                      <Text style={styles.fuelPlanPrice}>₹{plan.price}</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.enablePlanBtn, enabled && styles.enabledPlanBtn]}
-                      onPress={() => handleEnablePlan(plan.id)}
-                      disabled={enabled || enablingPlanId === plan.id}
-                    >
-                      {enablingPlanId === plan.id ? (
-                        <ActivityIndicator color={Colors.background} size="small" />
-                      ) : (
-                        <Text style={[styles.enablePlanText, enabled && styles.enabledPlanText]}>
-                          {enabled ? 'Enabled' : 'Enable'}
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                    <ChevronRight size={16} color={Colors.textSecondary} />
-                  </View>
-
-                  {slots.length > 0 && (
-                    <View style={styles.timeSlotsRow}>
-                      {slots.map(slot => (
-                        <View key={`${plan.id}-${slot}`} style={styles.timeSlotChip}>
-                          <Clock size={11} color={Colors.cyan} />
-                          <Text style={styles.timeSlotText}>{fmt12(slot)}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </View>
-
-        {/* Subscribers Section */}
-        <View style={styles.subsSection}>
-          <TouchableOpacity
-            style={styles.subsSectionHeader}
-            onPress={() => navigation.navigate('FuelSubscribers')}
-            activeOpacity={0.7}
-          >
-            <Users size={15} color={Colors.cyan} />
-            <Text style={styles.subsSectionTitle}>
-              Fuel Subscribers{subscribers.length > 0 ? ` (${subscribers.length})` : ''}
-            </Text>
-            <ChevronRight size={15} color={Colors.textSecondary} />
-          </TouchableOpacity>
-
-          {loadingSubscribers ? (
-            <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: Spacing.sm }} />
-          ) : subscribers.length === 0 ? (
-            <Text style={styles.subsEmpty}>No active subscribers yet.</Text>
-          ) : (
-            subscribers.slice(0, 3).map(sub => (
-              <View key={sub.id} style={styles.subRow}>
-                <View style={styles.subAvatar}>
-                  <Users size={14} color={Colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.subName}>{sub.user?.name ?? 'Customer'}</Text>
-                  <Text style={styles.subPlan}>{sub.plan?.name ?? 'Fuel Plan'}</Text>
-                </View>
-                {sub.status && (
-                  <View style={[
-                    styles.subStatusBadge,
-                    { backgroundColor: sub.status === 'ACTIVE' ? 'rgba(74,222,128,0.1)' : 'rgba(250,204,21,0.1)' }
-                  ]}>
-                    <Text style={[
-                      styles.subStatusText,
-                      { color: sub.status === 'ACTIVE' ? Colors.primary : Colors.warning }
-                    ]}>
-                      {sub.status}
-                    </Text>
-                  </View>
-                )}
-              </View>
+            availablePlans.map((plan, i) => (
+              <FadeInView key={plan.id} delay={180 + i * 60}>
+                <FuelPlanCard plan={plan} onPress={() => openPlan(plan)} />
+              </FadeInView>
             ))
           )}
+        </FadeInView>
 
-          {subscribers.length > 3 && (
-            <TouchableOpacity
-              style={styles.viewAllBtn}
-              onPress={() => navigation.navigate('FuelSubscribers')}
-            >
-              <Text style={styles.viewAllText}>View all {subscribers.length} subscribers</Text>
-              <ChevronRight size={13} color={Colors.cyan} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Section Title */}
-        <Text style={styles.sectionTitle}>Today's Work</Text>
-
-        {/* Content */}
-        {loading && !refreshing ? (
-          <View style={styles.centerBox}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.centerText}>Loading Fuel tasks...</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.errorBox}>
-            <AlertCircle size={36} color={Colors.danger} />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryBtn} onPress={() => fetchFulfillments()}>
-              <Text style={styles.retryBtnText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : fulfillments.length === 0 ? (
-          <View style={styles.centerBox}>
-            <Zap size={36} color={Colors.textSecondary} />
-            <Text style={styles.centerText}>No Fuel tasks for today.</Text>
-          </View>
-        ) : (
-          sortedSlots.map(slot => (
-            <View key={slot} style={styles.slotGroup}>
-              <View style={styles.slotHeader}>
-                <Clock size={13} color={Colors.cyan} />
-                <Text style={styles.slotTime}>{fmt12(slot)}</Text>
-                <View style={styles.slotCountBadge}>
-                  <Text style={styles.slotCountText}>{grouped[slot].length}</Text>
-                </View>
-              </View>
-
-              {grouped[slot].map(item => {
-                const cfg = STATUS_CONFIG[item.delivery_status] ?? {
-                  label: item.delivery_status,
-                  color: Colors.textSecondary,
-                  bg: 'rgba(156, 163, 175, 0.1)',
-                };
-                return (
-                  <View key={item.id} style={styles.fulfillmentCard}>
-                    <View style={styles.fulfillmentTop}>
-                      <View style={{ flex: 1 }}>
-                        {item.menu?.item_name ? (
-                          <Text style={styles.dishName}>{item.menu.item_name}</Text>
-                        ) : (
-                          <Text style={styles.dishNameEmpty}>Menu not set</Text>
-                        )}
-                        <Text style={styles.planName}>
-                          {item.subscription?.plan?.name ?? 'Fuel Plan'}
-                        </Text>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-                        <Text style={[styles.statusText, { color: cfg.color }]}>
-                          {cfg.label}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.customerRow}>
-                      <Text style={styles.customerName}>
-                        {item.subscription?.user?.name ?? 'Customer'}
-                      </Text>
-                      {item.subscription?.user?.phone && (
-                        <View style={styles.customerPhoneRow}>
-                          <Phone size={11} color={Colors.textSecondary} />
-                          <Text style={styles.customerPhoneText}>
-                            {item.subscription.user.phone}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {item.delivery_status === 'SCHEDULED' && (
-                      <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={() => handleStatusUpdate(item.id, 'COOKING')}
-                        activeOpacity={0.8}
-                      >
-                        <Play size={13} color={Colors.background} />
-                        <Text style={styles.actionBtnText}>Start Cooking</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {item.delivery_status === 'COOKING' && (
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.actionBtnYellow]}
-                        onPress={() =>
-                          navigation.navigate('FuelWeighIn', {
-                            fulfillmentId: item.id,
-                            itemName: item.menu?.item_name,
-                          })
-                        }
-                        activeOpacity={0.8}
-                      >
-                        <Camera size={13} color={Colors.background} />
-                        <Text style={styles.actionBtnText}>Weigh-In & Upload</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {item.delivery_status === 'READY_FOR_PICKUP' && (
-                      <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={() => handleStatusUpdate(item.id, 'PICKED_UP')}
-                        activeOpacity={0.8}
-                      >
-                        <PackageCheck size={13} color={Colors.background} />
-                        <Text style={styles.actionBtnText}>Mark Picked Up</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {item.delivery_status === 'PICKED_UP' && (
-                      <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={() => handleStatusUpdate(item.id, 'DELIVERED')}
-                        activeOpacity={0.8}
-                      >
-                        <Truck size={13} color={Colors.background} />
-                        <Text style={styles.actionBtnText}>Mark Delivered</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {item.delivery_status === 'DELIVERED' && (
-                      <View style={styles.readyRow}>
-                        <Check size={13} color={Colors.primary} />
-                        <Text style={styles.readyRowText}>Delivered</Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
+        {/* Subscribers */}
+        <FadeInView delay={210} style={styles.section}>
+          <View style={styles.subsHead}>
+            <View style={styles.flex}>
+              <Text style={styles.h3}>Active Subscribers</Text>
+              <Text style={styles.subTiny}>
+                {activeSubscribers.length} active {activeSubscribers.length === 1 ? 'subscriber' : 'subscribers'}
+              </Text>
             </View>
-          ))
+            {subscribers.length > 0 && (
+              <Pressable onPress={() => navigation.navigate('FuelSubscribers')} hitSlop={8} style={styles.linkRow}>
+                <Text style={styles.link}>View all</Text>
+                <ChevronRight size={10} color={FUEL.primary} strokeWidth={1.5} />
+              </Pressable>
+            )}
+          </View>
+          {loadingSubscribers ? (
+            <SectionLoader />
+          ) : subscribers.length === 0 ? (
+            <Text style={styles.empty}>No active subscribers yet.</Text>
+          ) : (
+            <View style={styles.subList}>
+              {subscribers.slice(0, SUBSCRIBER_PREVIEW).map((sub) => (
+                <SubscriberRow key={sub.id} sub={sub} onPress={() => navigation.navigate('FuelSubscribers')} />
+              ))}
+            </View>
+          )}
+          {subscribers.length > 0 && (
+            <PressableScale style={styles.outlineBtn} onPress={() => navigation.navigate('FuelSubscribers')} pressedScale={0.97}>
+              <Text style={styles.outlineText}>View All Subscribers</Text>
+              <ChevronRight size={11} color={FUEL.primary} strokeWidth={1.5} />
+            </PressableScale>
+          )}
+        </FadeInView>
+
+        {/* Active plans */}
+        {activePlans.length > 0 && (
+          <FadeInView delay={250} style={styles.section}>
+            <View style={styles.sectionHead}>
+              <Text style={styles.h2}>Active Fuel Plans</Text>
+              <Text style={styles.sub}>GoHomeyy-managed plans for your kitchen</Text>
+            </View>
+            {activePlans.map((plan) => (
+              <FuelPlanCard key={plan.id} plan={plan} active onPress={() => openPlan(plan)} />
+            ))}
+          </FadeInView>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.background },
-  scroll: { flex: 1 },
-  scrollContent: { padding: Spacing.md, paddingBottom: 40 },
-
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.lg,
+  root: { flex: 1, backgroundColor: C.bg },
+  flex: { flex: 1 },
+  headerWrap: { backgroundColor: C.surface },
+  content: { paddingHorizontal: 15, paddingTop: 10, gap: 9 },
+  // Impact
+  impact: {
+    height: 133,
+    padding: 18,
+    gap: 21,
+    overflow: 'hidden',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 6,
+    shadowColor: '#8F5A41',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  screenTitle: { ...Typography.h1 },
-  dateLabel: { ...Typography.caption, marginTop: 2 },
-  headerIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(250, 204, 21, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Stats
-  statsRow: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  statCard: { flex: 1, alignItems: 'center', paddingVertical: Spacing.md },
-  statMiddle: {
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: Colors.border,
-  },
-  statNum: { ...Typography.h2, fontSize: 22 },
-  statLabel: { ...Typography.caption, marginTop: 2 },
-
-  // Fuel NOW card
+  leaf: { position: 'absolute', right: 10, bottom: -10, transform: [{ rotate: '-10deg' }] },
+  impactTitle: { fontFamily: F.jakartaExtraBold, fontSize: 10, lineHeight: 15, letterSpacing: 1.1, color: 'rgba(255,255,255,0.92)' },
+  impactRow: { flexDirection: 'row' },
+  impactCell: { flex: 1, gap: 3, paddingRight: 12 },
+  impactDivider: { borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.3)' },
+  impactValue: { fontFamily: F.jakartaExtraBold, fontSize: 20, lineHeight: 20, color: C.white },
+  impactLabel: { fontFamily: F.jakartaRegular, fontSize: 9, lineHeight: 12.15, color: C.white },
+  // Fuel now
   nowCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  nowCardActive: {
-    borderColor: 'rgba(74, 222, 128, 0.4)',
-    backgroundColor: 'rgba(74, 222, 128, 0.05)',
-  },
-  nowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  nowIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.sm,
-  },
-  nowIconActive: { backgroundColor: 'rgba(74, 222, 128, 0.15)' },
-  nowTitle: { ...Typography.body, fontWeight: '600' },
-  nowSub: { ...Typography.caption, marginTop: 2 },
-
-  // Subscribers link
-  subscribersLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 8,
-  },
-  subscribersLinkText: {
-    ...Typography.body,
-    color: Colors.cyan,
-    flex: 1,
-    fontWeight: '600',
-    fontSize: 13,
-  },
-
-  // Fuel plans
-  plansSection: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Spacing.lg,
-    overflow: 'hidden',
-  },
-  plansSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  plansSectionTitle: {
-    ...Typography.body,
-    color: Colors.warning,
-    fontWeight: '700',
-    flex: 1,
-    fontSize: 13,
-  },
-  planRow: {
-    padding: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  planRowTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  fuelPlanName: {
-    ...Typography.body,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  fuelPlanPrice: {
-    ...Typography.caption,
-    color: Colors.warning,
-    marginTop: 2,
-    fontWeight: '700',
-  },
-  enablePlanBtn: {
-    minWidth: 82,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  enabledPlanBtn: {
-    backgroundColor: 'rgba(74, 222, 128, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(74, 222, 128, 0.35)',
-  },
-  enablePlanText: {
-    color: Colors.background,
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  enabledPlanText: {
-    color: Colors.primary,
-  },
-  timeSlotsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 10,
-  },
-  timeSlotChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(34, 211, 238, 0.1)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  timeSlotText: {
-    fontSize: 11,
-    color: Colors.cyan,
-    fontWeight: '600',
-  },
-
-  sectionTitle: {
-    ...Typography.h3,
-    marginBottom: Spacing.sm,
-  },
-
-  // Loading / error / empty
-  centerBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-  centerText: { ...Typography.body, color: Colors.textSecondary, marginTop: Spacing.md },
-  errorBox: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    backgroundColor: 'rgba(239, 68, 68, 0.05)',
-    borderRadius: 16,
-  },
-  errorText: {
-    ...Typography.body,
-    color: Colors.danger,
-    textAlign: 'center',
-    marginVertical: Spacing.md,
-  },
-  retryBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.sm,
-    borderRadius: 20,
-  },
-  retryBtnText: { ...Typography.body, fontWeight: 'bold', color: Colors.background },
-
-  // Slot groups
-  slotGroup: { marginBottom: Spacing.md },
-  slotHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-    gap: 6,
-  },
-  slotTime: { ...Typography.caption, color: Colors.cyan, fontWeight: '700', flex: 1 },
-  slotCountBadge: {
-    backgroundColor: 'rgba(34, 211, 238, 0.15)',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  slotCountText: { fontSize: 11, color: Colors.cyan, fontWeight: 'bold' },
-
-  // Fulfillment card
-  fulfillmentCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  fulfillmentTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
-  dishName: { ...Typography.body, fontWeight: '700', fontSize: 15, marginBottom: 2 },
-  dishNameEmpty: {
-    ...Typography.body,
-    fontWeight: '700',
-    fontSize: 15,
-    marginBottom: 2,
-    color: Colors.textSecondary,
-    fontStyle: 'italic',
-  },
-  planName: { ...Typography.caption },
-  customerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  customerName: { ...Typography.caption, fontWeight: '600', color: Colors.text },
-  customerPhoneRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  customerPhoneText: { ...Typography.caption, fontSize: 11 },
-  statusBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    alignSelf: 'flex-start',
-  },
-  statusText: { fontSize: 11, fontWeight: '700' },
-
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingVertical: 10,
-    gap: 6,
-  },
-  actionBtnYellow: { backgroundColor: Colors.warning },
-  actionBtnText: { color: Colors.background, fontWeight: 'bold', fontSize: 13 },
-
-  readyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 2,
-  },
-  readyRowText: {
-    ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: '700',
-  },
-
-  // Offer Modal
-  offerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.lg,
-  },
-  offerCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 24,
-    padding: Spacing.lg,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(250, 204, 21, 0.3)',
-  },
-  offerHeader: { alignItems: 'center', marginBottom: Spacing.md },
-  offerIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(250, 204, 21, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.sm,
-  },
-  offerTitle: { ...Typography.h2, textAlign: 'center' },
-  offerSubtitle: { ...Typography.caption, textAlign: 'center', marginTop: 4 },
-  countdownWrap: { alignItems: 'center', marginBottom: Spacing.md },
-  countdownNum: {
-    fontSize: 64,
-    fontWeight: 'bold',
-    color: Colors.warning,
-    lineHeight: 72,
-  },
-  countdownLabel: { ...Typography.caption, marginTop: 4 },
-  offerDetails: {
-    backgroundColor: Colors.background,
-    borderRadius: 12,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    gap: 8,
-  },
-  offerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  offerRowText: { ...Typography.caption, color: Colors.text },
-  offerActions: { flexDirection: 'row', gap: 12 },
-  declineBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.danger,
-    paddingVertical: 14,
-    gap: 6,
-  },
-  declineBtnText: { color: Colors.danger, fontWeight: 'bold', fontSize: 14 },
-  acceptBtn: {
-    flex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-    backgroundColor: Colors.primary,
-    paddingVertical: 14,
-    gap: 6,
-  },
-  acceptBtnText: { color: Colors.background, fontWeight: 'bold', fontSize: 14 },
-
-  // Subscribers section
-  subsSection: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Spacing.lg,
-    overflow: 'hidden',
-  },
-  subsSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  subsSectionTitle: {
-    ...Typography.body,
-    color: Colors.cyan,
-    fontWeight: '700',
-    flex: 1,
-    fontSize: 13,
-  },
-  subsEmpty: {
-    ...Typography.caption,
-    textAlign: 'center',
-    paddingVertical: Spacing.md,
-    color: Colors.textSecondary,
-  },
-  subRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 10,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    minHeight: 69,
+    paddingHorizontal: 11,
+    paddingVertical: 16,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: FUEL.border,
+    backgroundColor: C.surface,
   },
-  subAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  subName: { ...Typography.body, fontWeight: '700', fontSize: 13 },
-  subPlan: { ...Typography.caption, marginTop: 1 },
-  subStatusBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  subStatusText: { fontSize: 10, fontWeight: '700' },
-  viewAllBtn: {
+  nowIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: FUEL.peach, alignItems: 'center', justifyContent: 'center' },
+  nowTitle: { fontFamily: F.jakartaRegular, fontSize: 12, lineHeight: 18, color: FUEL.ink },
+  nowSub: { fontFamily: F.jakartaRegular, fontSize: 8.5, lineHeight: 12.75, color: FUEL.muted },
+  nowState: { fontFamily: F.jakartaExtraBold, fontSize: 8, lineHeight: 12, color: FUEL.muted },
+  // Sections
+  section: { gap: 8, marginTop: 8 },
+  sectionHead: { gap: 3, paddingTop: 7, paddingHorizontal: 2 },
+  h2: { fontFamily: F.jakartaExtraBold, fontSize: 13, lineHeight: 19.5, color: FUEL.ink },
+  h3: { fontFamily: F.jakartaExtraBold, fontSize: 12, lineHeight: 18, color: FUEL.ink },
+  sub: { fontFamily: F.jakartaRegular, fontSize: 9, lineHeight: 13.5, color: FUEL.muted },
+  subTiny: { fontFamily: F.jakartaRegular, fontSize: 7.5, lineHeight: 11.25, color: FUEL.muted },
+  subsHead: { flexDirection: 'row', alignItems: 'center', paddingTop: 7 },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  link: { fontFamily: F.jakartaExtraBold, fontSize: 7.5, lineHeight: 11.25, color: FUEL.primary },
+  subList: { gap: 4 },
+  outlineBtn: {
+    height: 28,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: FUEL.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 10,
+    gap: 8,
+    marginTop: 4,
   },
-  viewAllText: { ...Typography.caption, color: Colors.cyan, fontWeight: '600' },
-
+  outlineText: { fontFamily: F.jakartaExtraBold, fontSize: 8, lineHeight: 12, color: FUEL.primary },
+  empty: { fontFamily: F.jakartaSemiBold, fontSize: 11, color: FUEL.muted, paddingVertical: 8, paddingHorizontal: 2 },
+  slotGroup: { gap: 8 },
+  slotTime: { fontFamily: F.jakartaBold, fontSize: 10, color: C.primaryRing, paddingHorizontal: 2 },
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
+  errorText: { fontFamily: F.jakartaSemiBold, fontSize: 11, color: C.danger },
 });

@@ -1,29 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TextInput, 
-  TouchableOpacity, 
-  KeyboardAvoidingView, 
-  Platform,
-  TouchableWithoutFeedback,
-  Keyboard,
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
   ScrollView,
-  ActivityIndicator
+  Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Spacing, Typography } from '../theme';
-import { Utensils, ArrowRight } from 'lucide-react-native';
-import { ChefTip } from '../components/ChefTip';
+import { StatusBar } from 'expo-status-bar';
 import Toast from 'react-native-toast-message';
+import { C, F, Radius, Shadows, T } from '../theme';
+import { AuthBackground, BrandMark, FadeInView, PrimaryButton } from '../components/ui';
 import { sendOtp, mapOtpError } from '../services/otpService';
 import { useAuth } from '../context/AuthContext';
+import { KeyboardAware } from '../components/ui/KeyboardAware';
 
 export const LoginScreen = ({ navigation }: any) => {
   const { sessionMessage, clearSessionMessage } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
+  const focus = useRef(new Animated.Value(0)).current;
 
   // Surface why the user landed back here (expired / invalid session).
   useEffect(() => {
@@ -59,190 +55,117 @@ export const LoginScreen = ({ navigation }: any) => {
     }
   };
 
+  const animateFocus = (toValue: number) =>
+    Animated.timing(focus, { toValue, duration: 180, useNativeDriver: false }).start();
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
-      >
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.content}>
-            {/* Logo Section */}
-            <View style={styles.logoContainer}>
-              <View style={styles.logoCircle}>
-                <Utensils size={40} color={Colors.primary} />
+    <AuthBackground>
+      <StatusBar style="light" />
+      <KeyboardAware style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" bounces={false}>
+          <FadeInView fromScale={0.96} offset={24} duration={520} style={styles.card}>
+            <View style={styles.headline}>
+              <FadeInView delay={150}>
+                <BrandMark />
+              </FadeInView>
+              <View style={styles.textBlock}>
+                <FadeInView delay={220}>
+                  <Text style={[T.authTitle, styles.center]}>Sign in to your Account</Text>
+                </FadeInView>
+                <FadeInView delay={290}>
+                  <Text style={[T.authSubtitle, styles.center]}>Enter your mobile number to log in</Text>
+                </FadeInView>
               </View>
-              <Text style={styles.title}>Welcome Back, Chef</Text>
-              <Text style={styles.subtitle}>Manage your atelier with precision.</Text>
             </View>
 
-            {/* Input Section */}
-            <View style={styles.inputSection}>
-              <Text style={styles.label}>MOBILE NUMBER</Text>
-              <View style={styles.inputWrapper}>
+            <FadeInView delay={360} style={styles.form}>
+              <Animated.View
+                style={[
+                  styles.inputArea,
+                  { borderColor: focus.interpolate({ inputRange: [0, 1], outputRange: [C.borderAuth, C.primary] }) },
+                ]}
+              >
                 <TextInput
-                  style={styles.input}
-                  placeholder="9876543210"
-                  placeholderTextColor={Colors.textSecondary}
+                  style={[T.authInput, styles.input]}
+                  placeholder="Enter Your Number"
+                  placeholderTextColor={C.placeholder}
                   keyboardType="phone-pad"
                   value={phoneNumber}
-                  onChangeText={setPhoneNumber}
+                  onChangeText={(v) => setPhoneNumber(v.replace(/\D/g, ''))}
                   maxLength={10}
-                  autoFocus={true}
+                  autoFocus
+                  textContentType="telephoneNumber"
+                  autoComplete="tel"
+                  onFocus={() => animateFocus(1)}
+                  onBlur={() => animateFocus(0)}
+                  returnKeyType="done"
+                  onSubmitEditing={handleGetOtp}
                 />
-              </View>
-              <Text style={styles.hint}>We'll send a 6-digit verification code via SMS.</Text>
-            </View>
+              </Animated.View>
 
-            {/* Action Section */}
-            <TouchableOpacity 
-              style={[styles.button, (phoneNumber.length < 10 || loading) && styles.buttonDisabled]}
-              onPress={handleGetOtp}
-              disabled={phoneNumber.length < 10 || loading}
-            >
-              {loading ? (
-                <ActivityIndicator color={Colors.background} size="small" />
-              ) : (
-                <>
-                  <Text style={styles.buttonText}>GET OTP</Text>
-                  <ArrowRight size={20} color={Colors.background} />
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.applyLink}
-              onPress={() => {
-                if (phoneNumber.length < 10) {
-                  Toast.show({
-                    type: 'info',
-                    text1: 'Enter your mobile number',
-                    text2: 'We verify your number by OTP before registration.',
-                  });
-                  return;
-                }
-                handleGetOtp();
-              }}
-            >
-              <Text style={styles.applyText}>Don't have an account? <Text style={styles.applyHighlight}>Apply to Join</Text></Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.footer}>
-            <ChefTip tip="Ensure your mobile number is updated in the atelier records to receive priority service notifications." />
-          </View>
+              <PrimaryButton
+                label="Send OTP"
+                onPress={handleGetOtp}
+                loading={loading}
+                disabled={phoneNumber.length < 10}
+              />
+            </FadeInView>
+          </FadeInView>
         </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </KeyboardAware>
+    </AuthBackground>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  container: {
+  flex: {
     flex: 1,
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: Spacing.xl,
-    justifyContent: 'center',
-    paddingTop: 60,
-    paddingBottom: 40,
-  },
-  scrollContent: {
+  scroll: {
     flexGrow: 1,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  logoCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.xl,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    // Figma: card top sits at 257/917 — slightly above true centre.
+    paddingBottom: 50,
+    paddingTop: 24,
+  },
+  card: {
+    width: 327,
+    maxWidth: '100%',
+    backgroundColor: C.glass,
+    borderRadius: Radius.auth,
+    padding: 24,
+    alignItems: 'center',
+    gap: 14,
+  },
+  headline: {
+    alignItems: 'center',
+    gap: 24,
+  },
+  textBlock: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  center: {
+    textAlign: 'center',
+  },
+  form: {
+    width: '100%',
+    gap: 24,
+  },
+  inputArea: {
+    height: 46,
+    borderRadius: Radius.auth,
     borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  title: {
-    ...Typography.h1,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-  },
-  inputSection: {
-    marginBottom: Spacing.xl,
-  },
-  label: {
-    ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  inputWrapper: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    height: 64,
+    backgroundColor: C.surface,
+    paddingHorizontal: 14,
     justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    ...Shadows.input,
   },
   input: {
-    flex: 1,
-    ...Typography.h2,
-    color: Colors.text,
     height: '100%',
-  },
-  hint: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 12,
-  },
-  button: {
-    backgroundColor: Colors.primary,
-    height: 64,
-    borderRadius: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xl,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    ...Typography.h3,
-    color: Colors.background,
-    marginRight: 12,
-  },
-  applyLink: {
-    alignItems: 'center',
-  },
-  applyText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    fontSize: 14,
-  },
-  applyHighlight: {
-    color: Colors.primary,
-    fontWeight: 'bold',
-  },
-  footer: {
-    padding: Spacing.lg,
-    paddingBottom: 40,
+    paddingVertical: 0,
+    fontFamily: F.interMedium,
   },
 });

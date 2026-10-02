@@ -1,31 +1,15 @@
-import React, { useState, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Spacing, Typography } from '../theme';
-import {
-  ChevronLeft,
-  MapPin,
-  Utensils,
-  ArrowRight,
-  Plus,
-  X,
-  Check,
-} from 'lucide-react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TextInput, Pressable, BackHandler } from 'react-native';
+import { Plus } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
+import * as Location from 'expo-location';
+import { C, F, Radius, T } from '../theme';
+import { Chip, FadeInView, FormField, OnboardingLayout, PrimaryButton } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import MapView, { Marker, Region } from '../components/PlatformMap';
 import { LocationSearchInput } from '../components/LocationSearchInput';
-import * as Location from 'expo-location';
+import { friendlyApiError } from '../utils/apiErrors';
+import { REG_PROGRESS, stepLabel } from './registration/shared';
 
 const PRESET_APPLIANCES = [
   'OVEN',
@@ -44,8 +28,14 @@ const PRESET_APPLIANCES = [
   'GAS STOVE',
 ];
 
+const toTitle = (s: string) => s.toLowerCase().replace(/(^|[\s-])\S/g, (m) => m.toUpperCase());
+
+const formatReverse = (a: Location.LocationGeocodedAddress) =>
+  `${a.name || ''} ${a.street || ''}, ${a.city || ''}, ${a.region || ''} ${a.postalCode || ''}`.trim().replace(/^ ,/, '');
+
 export const RegisterStep2 = ({ navigation, route }: any) => {
   const { updateRegistrationStep } = useAuth();
+  const [page, setPage] = useState<'kitchen' | 'location'>('kitchen');
   const [kitchenName, setKitchenName] = useState('');
   const [capacity, setCapacity] = useState('12');
   const [appliances, setAppliances] = useState<string[]>([]);
@@ -69,6 +59,16 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
   const email = route?.params?.email;
   const token = route?.params?.token;
 
+  // Hardware back on the second page returns to the first.
+  useEffect(() => {
+    if (page !== 'location') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setPage('kitchen');
+      return true;
+    });
+    return () => sub.remove();
+  }, [page]);
+
   const toggleAppliance = (item: string) => {
     setAppliances(prev =>
       prev.includes(item) ? prev.filter(a => a !== item) : [...prev, item]
@@ -82,6 +82,26 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
     }
     setNewAppliance('');
     inputRef.current?.focus();
+  };
+
+  const updateFromCoordinate = (latitude: number, longitude: number) => {
+    setCoordinates({ latitude, longitude });
+    setRegion(r => ({ ...r, latitude, longitude }));
+    Location.reverseGeocodeAsync({ latitude, longitude }).then(r => {
+      if (r.length > 0) {
+        const f = formatReverse(r[0]);
+        setAddress(f);
+        setAddressQuery(f);
+      }
+    });
+  };
+
+  const handleKitchenContinue = () => {
+    if (!kitchenName.trim()) {
+      Toast.show({ type: 'error', text1: 'Missing Fields', text2: 'Please enter your kitchen name.' });
+      return;
+    }
+    setPage('location');
   };
 
   const handleNext = async () => {
@@ -139,7 +159,7 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
           navigation.navigate('Login');
           return;
         }
-        throw new Error(errorData.message || `Failed to submit Step 2 (Status: ${response.status})`);
+        throw new Error(friendlyApiError(response.status, errorData).message);
       }
 
       console.log('Step 2 API Success');
@@ -162,546 +182,202 @@ export const RegisterStep2 = ({ navigation, route }: any) => {
     }
   };
 
-  return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ChevronLeft size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chef Registration</Text>
-        <View style={styles.stepBadge}>
-          <Text style={styles.stepText}>Step 2/3</Text>
-        </View>
-      </View>
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
+  if (page === 'kitchen') {
+    return (
+      <OnboardingLayout
+        onBack={() => navigation.goBack()}
+        progress={REG_PROGRESS.kitchen}
+        progressFrom={REG_PROGRESS.cuisine}
+        footer={<PrimaryButton label="Continue" onPress={handleKitchenContinue} />}
       >
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={styles.contentContainer}
-          keyboardShouldPersistTaps="always"
-        >
-          <View style={styles.introSection}>
-            <Text style={styles.subtitle}>WORKSPACE PROFILE</Text>
-            <Text style={styles.title}>Your Kitchen Space</Text>
-            <Text style={styles.description}>
-              Tell us about where the magic happens. Your kitchen details help clients trust your craft.
-            </Text>
-          </View>
+        <FadeInView style={styles.titleTight}>
+          <Text style={T.screenTitle}>Chef Onboarding Welcome</Text>
+          <Text style={T.subtitle}>{stepLabel(2)}</Text>
+        </FadeInView>
 
-          <View style={styles.form}>
-            {/* Kitchen Name */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>KITCHEN NAME</Text>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.input}
-                  value={kitchenName}
-                  onChangeText={setKitchenName}
-                  placeholder="e.g. The Emerald Atelier"
-                  placeholderTextColor={Colors.textSecondary}
-                />
-              </View>
-            </View>
+        <FadeInView delay={80}>
+          <FormField
+            label="Kitchen name"
+            value={kitchenName}
+            onChangeText={setKitchenName}
+            placeholder="e.g. Maria's Home Kitchen"
+            autoCapitalize="words"
+          />
+        </FadeInView>
 
-            {/* Location */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>LOCATION</Text>
+        <FadeInView delay={140} style={styles.locationGroup}>
+          <Text style={T.label}>Location</Text>
+          <LocationSearchInput
+            variant="light"
+            value={addressQuery}
+            onChangeText={setAddressQuery}
+            onLocationSelected={({ address, latitude, longitude }) => {
+              setAddress(address);
+              setCoordinates({ latitude, longitude });
+              setRegion({ latitude, longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
+            }}
+            placeholder="Search your area, e.g. Indiranagar"
+          />
+        </FadeInView>
+      </OnboardingLayout>
+    );
+  }
 
-              <LocationSearchInput
-                value={addressQuery}
-                onChangeText={setAddressQuery}
-                onLocationSelected={({ address, latitude, longitude }) => {
-                  setAddress(address);
-                  setCoordinates({ latitude, longitude });
-                  setRegion({ latitude, longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
-                }}
-                placeholder="Search for your kitchen address..."
-              />
-
-              <View style={styles.mapContainer}>
-                <MapView
-                  style={styles.map}
-                  region={region}
-                  onPress={(e: any) => {
-                    const { latitude, longitude } = e.nativeEvent.coordinate;
-                    setCoordinates({ latitude, longitude });
-                    setRegion({ ...region, latitude, longitude });
-                    Location.reverseGeocodeAsync({ latitude, longitude }).then(r => {
-                      if (r.length > 0) {
-                        const a = r[0];
-                        const f = `${a.name || ''} ${a.street || ''}, ${a.city || ''}, ${a.region || ''} ${a.postalCode || ''}`.trim().replace(/^ ,/, '');
-                        setAddress(f);
-                        setAddressQuery(f);
-                      }
-                    });
-                  }}
-                >
-                  <Marker
-                    coordinate={coordinates}
-                    draggable
-                    onDragEnd={(e: any) => {
-                      const { latitude, longitude } = e.nativeEvent.coordinate;
-                      setCoordinates({ latitude, longitude });
-                      Location.reverseGeocodeAsync({ latitude, longitude }).then(r => {
-                        if (r.length > 0) {
-                          const a = r[0];
-                          const f = `${a.name || ''} ${a.street || ''}, ${a.city || ''}, ${a.region || ''} ${a.postalCode || ''}`.trim().replace(/^ ,/, '');
-                          setAddress(f);
-                          setAddressQuery(f);
-                        }
-                      });
-                    }}
-                    title="Kitchen Location"
-                  />
-                </MapView>
-              </View>
-              {address ? (
-                <View style={styles.locationBar}>
-                  <MapPin size={16} color={Colors.primary} />
-                  <Text style={styles.locationText} numberOfLines={2}>{address}</Text>
-                </View>
-              ) : null}
-            </View>
-
-            {/* Capacity */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>CAPACITY</Text>
-              <View style={styles.capacityWrapper}>
-                <View style={styles.capacityIconContainer}>
-                  <Utensils size={24} color={Colors.primary} />
-                </View>
-                <View style={styles.capacityInputContainer}>
-                  <TextInput
-                    style={styles.capacityValue}
-                    value={capacity}
-                    onChangeText={setCapacity}
-                    keyboardType="numeric"
-                  />
-                  <Text style={styles.capacityLabel}>meals / slot</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Appliances */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>APPLIANCES</Text>
-              <Text style={styles.applianceHint}>Tap to select - tap again to deselect</Text>
-
-              {/* Preset grid */}
-              <View style={styles.chipGrid}>
-                {PRESET_APPLIANCES.map((item) => {
-                  const selected = appliances.includes(item);
-                  return (
-                    <TouchableOpacity
-                      key={item}
-                      style={[
-                        styles.chip,
-                        selected && styles.chipActive,
-                      ]}
-                      onPress={() => toggleAppliance(item)}
-                      activeOpacity={0.7}
-                    >
-                      {selected && (
-                        <Check size={11} color={Colors.primary} style={{ marginRight: 4 }} />
-                      )}
-                      <Text style={[styles.chipLabel, selected && styles.chipLabelActive]}>
-                        {item}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Custom tags (non-preset selected) */}
-              {appliances.filter(a => !PRESET_APPLIANCES.includes(a)).length > 0 && (
-                <View style={styles.customRow}>
-                  <Text style={styles.customRowLabel}>CUSTOM</Text>
-                  <View style={styles.chipGrid}>
-                    {appliances
-                      .filter(a => !PRESET_APPLIANCES.includes(a))
-                      .map(item => (
-                        <TouchableOpacity
-                          key={item}
-                          style={[
-                            styles.chip,
-                            styles.chipActive,
-                          ]}
-                          onPress={() => toggleAppliance(item)}
-                          activeOpacity={0.7}
-                        >
-                          <Check size={11} color={Colors.primary} style={{ marginRight: 4 }} />
-                          <Text style={[styles.chipLabel, styles.chipLabelActive]}>{item}</Text>
-                          <X size={10} color={Colors.primary} style={{ marginLeft: 4 }} />
-                        </TouchableOpacity>
-                      ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Add custom input */}
-              <View style={styles.addRow}>
-                <TextInput
-                  ref={inputRef}
-                  style={styles.addInput}
-                  value={newAppliance}
-                  onChangeText={setNewAppliance}
-                  placeholder="Add appliance, e.g. ROTISSERIE"
-                  placeholderTextColor={Colors.textSecondary}
-                  autoCapitalize="characters"
-                  returnKeyType="done"
-                  onSubmitEditing={addCustomAppliance}
-                />
-                {newAppliance.length > 0 && (
-                  <TouchableOpacity
-                    style={styles.addCancelBtn}
-                    onPress={() => setNewAppliance('')}
-                    activeOpacity={0.8}
-                  >
-                    <X size={16} color={Colors.textSecondary} />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={[
-                    styles.addConfirmBtn,
-                    !newAppliance.trim() && styles.addConfirmBtnDisabled,
-                  ]}
-                  onPress={addCustomAppliance}
-                  disabled={!newAppliance.trim()}
-                  activeOpacity={0.8}
-                >
-                  <Plus size={14} color={Colors.background} style={{ marginRight: 6 }} />
-                  <Text style={styles.addConfirmText}>ADD</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* Footer */}
-          <View style={styles.footer}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.prevBtn}>
-              <Text style={styles.prevBtnText}>PREVIOUS</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.nextBtn, loading && { opacity: 0.7 }]}
-              onPress={handleNext}
-              disabled={loading}
+  return (
+    <OnboardingLayout
+      onBack={() => setPage('kitchen')}
+      progress={REG_PROGRESS.location}
+      progressFrom={REG_PROGRESS.kitchen}
+      footer={<PrimaryButton label="Continue" onPress={handleNext} loading={loading} />}
+    >
+      <FadeInView style={styles.section}>
+        <Text style={T.screenTitle}>Kitchen Location</Text>
+        <View style={styles.fieldGroup}>
+          <Text style={T.label}>Pin your kitchen</Text>
+          <View style={styles.mapContainer}>
+            <MapView
+              style={styles.map}
+              region={region}
+              onPress={(e: any) => {
+                const { latitude, longitude } = e.nativeEvent.coordinate;
+                updateFromCoordinate(latitude, longitude);
+              }}
             >
-              {loading ? (
-                <ActivityIndicator color={Colors.background} size="small" />
-              ) : (
-                <>
-                  <Text style={styles.nextBtnText}>NEXT</Text>
-                  <ArrowRight size={18} color={Colors.background} style={{ marginLeft: 8 }} />
-                </>
-              )}
-            </TouchableOpacity>
+              <Marker
+                coordinate={coordinates}
+                draggable
+                onDragEnd={(e: any) => {
+                  const { latitude, longitude } = e.nativeEvent.coordinate;
+                  updateFromCoordinate(latitude, longitude);
+                }}
+                title="Kitchen Location"
+              />
+            </MapView>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </View>
+        <FormField
+          label="Address"
+          value={address}
+          onChangeText={setAddress}
+          placeholder="House no., street, area"
+        />
+      </FadeInView>
+
+      <FadeInView delay={80} style={styles.section}>
+        <Text style={T.screenTitle}>Kitchen Capacity</Text>
+        <FormField
+          label="Meals per slot"
+          value={capacity}
+          onChangeText={(v) => setCapacity(v.replace(/\D/g, ''))}
+          keyboardType="numeric"
+          right={<Text style={styles.unit}>meals / slot</Text>}
+        />
+      </FadeInView>
+
+      <FadeInView delay={140} style={styles.section}>
+        <Text style={T.screenTitle}>Appliances</Text>
+        <Text style={T.subtitle}>Tap to select — tap again to deselect</Text>
+        <View style={styles.chips}>
+          {[...PRESET_APPLIANCES, ...appliances.filter(a => !PRESET_APPLIANCES.includes(a))].map(item => (
+            <Chip
+              key={item}
+              label={toTitle(item)}
+              selected={appliances.includes(item)}
+              onPress={() => toggleAppliance(item)}
+            />
+          ))}
+        </View>
+        <View style={styles.addRow}>
+          <TextInput
+            ref={inputRef}
+            style={styles.addInput}
+            value={newAppliance}
+            onChangeText={setNewAppliance}
+            placeholder="Add another appliance"
+            placeholderTextColor={C.textMuted2}
+            returnKeyType="done"
+            onSubmitEditing={addCustomAppliance}
+          />
+          <Pressable
+            style={[styles.addBtn, !newAppliance.trim() && styles.addBtnDisabled]}
+            onPress={addCustomAppliance}
+            disabled={!newAppliance.trim()}
+            hitSlop={6}
+          >
+            <Plus size={16} color={C.white} />
+          </Pressable>
+        </View>
+      </FadeInView>
+    </OnboardingLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
+  titleTight: {
+    gap: 4,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+  locationGroup: {
+    gap: 6,
+    zIndex: 10,
   },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    ...Typography.body,
-    fontWeight: 'bold',
-    flex: 1,
-    textAlign: 'center',
-  },
-  stepBadge: {
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  stepText: {
-    color: Colors.primary,
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  container: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: Spacing.lg,
-    paddingBottom: 40,
-  },
-  introSection: {
-    marginBottom: 32,
-  },
-  subtitle: {
-    color: Colors.primary,
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 2,
-    marginBottom: 8,
-  },
-  title: {
-    ...Typography.h1,
-    fontSize: 32,
-    marginBottom: 12,
-  },
-  description: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    lineHeight: 24,
-  },
-  form: {
-    marginBottom: 32,
-  },
-  inputGroup: {
-    marginBottom: 24,
-  },
-  label: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    fontSize: 10,
-    letterSpacing: 1,
-  },
-  inputWrapper: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    paddingHorizontal: Spacing.md,
-    height: 60,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    justifyContent: 'center',
-  },
-  input: {
-    ...Typography.body,
-    color: Colors.text,
-  },
-  locationBar: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  locationText: {
-    color: Colors.text,
-    fontSize: 12,
-    marginLeft: 8,
-    flex: 1,
-  },
-  capacityWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 24,
-    padding: 16,
-    height: 100,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  capacityIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 20,
-  },
-  capacityInputContainer: {
-    flex: 1,
-  },
-  capacityValue: {
-    ...Typography.h1,
-    color: Colors.text,
-    fontSize: 32,
-    lineHeight: 40,
-  },
-  capacityLabel: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    fontSize: 12,
-  },
-  // Appliances
-  applianceHint: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    marginBottom: 14,
-  },
-  chipGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 12,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  chipActive: {
-    backgroundColor: 'rgba(74, 222, 128, 0.12)',
-    borderColor: Colors.primary,
-  },
-  chipLabel: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  chipLabelActive: {
-    color: Colors.primary,
-    fontWeight: 'bold',
-  },
-  customRow: {
-    marginBottom: 8,
-  },
-  customRowLabel: {
-    color: Colors.textSecondary,
-    fontSize: 9,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  addRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-    overflow: 'hidden',
-    height: 50,
-  },
-  addInput: {
-    flex: 1,
-    height: 50,
-    paddingHorizontal: 16,
-    color: Colors.text,
-    fontSize: 13,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  addConfirmBtn: {
-    backgroundColor: Colors.primary,
-    height: 50,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addConfirmBtnDisabled: {
-    opacity: 0.5,
-  },
-  addConfirmText: {
-    color: Colors.background,
-    fontWeight: 'bold',
-    fontSize: 11,
-    letterSpacing: 1,
-  },
-  addCancelBtn: {
-    height: 50,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderLeftWidth: 1,
-    borderLeftColor: Colors.border,
-  },
-  addCustomBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginTop: 4,
-  },
-  addCustomText: {
-    color: Colors.background,
-    fontSize: 11,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  // Footer
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  section: {
+    gap: 8,
     marginTop: 20,
   },
-  prevBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-  },
-  prevBtnText: {
-    color: Colors.textSecondary,
-    fontWeight: 'bold',
-    fontSize: 12,
-    letterSpacing: 1,
-  },
-  nextBtn: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 16,
-    minWidth: 140,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  nextBtnText: {
-    color: Colors.background,
-    fontWeight: 'bold',
-    fontSize: 14,
-    letterSpacing: 1,
+  fieldGroup: {
+    gap: 6,
   },
   mapContainer: {
-    height: 200,
-    borderRadius: 16,
+    height: 180,
+    borderRadius: Radius.tile,
     overflow: 'hidden',
-    marginTop: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   map: {
     width: '100%',
     height: '100%',
+  },
+  unit: {
+    fontFamily: F.jakartaRegular,
+    fontSize: 12,
+    color: C.textMuted,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  addRow: {
+    height: 44,
+    marginTop: 4,
+    borderRadius: Radius.field,
+    borderWidth: 1,
+    borderColor: C.searchBorder,
+    backgroundColor: C.searchBg,
+    paddingLeft: 16,
+    paddingRight: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addInput: {
+    flex: 1,
+    height: '100%',
+    paddingVertical: 0,
+    fontFamily: F.jakartaRegular,
+    fontSize: 12,
+    color: C.text,
+  },
+  addBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: C.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addBtnDisabled: {
+    opacity: 0.4,
   },
 });

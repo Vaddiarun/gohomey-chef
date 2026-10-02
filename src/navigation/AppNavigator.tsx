@@ -1,24 +1,22 @@
 import React from 'react';
-import { Platform } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
-import { ShoppingBag, User, Utensils, LayoutGrid, ClipboardList, Package, Users, Zap } from 'lucide-react-native';
-import { View, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
-import { Colors, Typography } from '../theme';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AuthProvider, useAuth } from '../context/AuthContext';
+import { View, ActivityIndicator } from 'react-native';
+import { C } from '../theme';
+import { FloatingTabBar } from './FloatingTabBar';
+import { AuthProvider, useAuth, getApplicationStatus } from '../context/AuthContext';
 import { SocialProvider } from '../context/SocialContext';
 
 const MyTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: Colors.background,
-    card: Colors.surface,
-    text: Colors.text,
-    border: Colors.border,
-    primary: Colors.primary,
+    background: C.bg,
+    card: C.surface,
+    text: C.text,
+    border: C.border,
+    primary: C.primary,
   },
 };
 import {
@@ -26,13 +24,15 @@ import {
   CatalogHistoryScreen,
   OrdersScreen,
   CreateSlotScreen,
-  ScheduleScreen,
   ProfileScreen,
   ProofUploadScreen,
   LoginScreen,
   VerificationScreen,
   LogoutScreen,
   EditProfileScreen,
+  WalletScreen,
+  WithdrawScreen,
+  WithdrawStatusScreen,
   RegisterStep1,
   RegisterStep2,
   RegisterStep3,
@@ -47,90 +47,56 @@ import {
   FuelSubscribersScreen,
   FuelWeighInScreen,
   FuelPlanDetailScreen,
+  DailyMenuScreen,
+  MealDetailScreen,
+  SuccessScreen,
 } from '../screens';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
 
-function TabNavigator() {
-  const insets = useSafeAreaInsets();
-  const tabBarHeight = Platform.OS === 'android' ? 70 + Math.max(insets.bottom, 16) : 60 + insets.bottom;
+const DashboardStack = createNativeStackNavigator();
 
+/** Dashboard tab: home + Orders, so the floating tab bar stays visible on Orders. */
+function DashboardStackNavigator() {
+  return (
+    <DashboardStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: C.bg } }}>
+      <DashboardStack.Screen name="DashboardHome" component={DashboardScreen} />
+      <DashboardStack.Screen name="Orders" component={OrdersScreen} />
+    </DashboardStack.Navigator>
+  );
+}
+
+function TabNavigator() {
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarIcon: ({ color, size }) => {
-          let IconComponent: React.ElementType;
-          if (route.name === 'Dashboard') IconComponent = LayoutGrid;
-          else if (route.name === 'Orders') IconComponent = ClipboardList;
-          else if (route.name === 'Pantry') IconComponent = Package;
-          else if (route.name === 'Fuel') IconComponent = Zap;
-          else if (route.name === 'Social') IconComponent = Users;
-          else if (route.name === 'Profile') IconComponent = User;
-          else IconComponent = LayoutGrid;
-          
-          return <IconComponent size={size} color={color} />;
-        },
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textSecondary,
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: 'bold',
-          marginBottom: 4,
-        },
-        tabBarStyle: {
-          backgroundColor: Colors.surface,
-          borderTopColor: Colors.border,
-          height: tabBarHeight,
-          paddingBottom: Platform.OS === 'android' ? Math.max(insets.bottom, 16) : insets.bottom,
-          paddingTop: 10,
-        },
-        tabBarHideOnKeyboard: true,
-      })}
+      tabBar={(props) => <FloatingTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
     >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Orders" component={OrdersScreen} />
+      <Tab.Screen name="Dashboard" component={DashboardStackNavigator} />
+      <Tab.Screen name="Daily" component={DailyMenuScreen} />
       <Tab.Screen name="Fuel" component={FuelDashboardScreen} />
       <Tab.Screen name="Pantry" component={PantryScreen} />
       <Tab.Screen name="Social" component={SocialEventsScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
 
 function AuthNavigator() {
-  const { pendingRegistration } = useAuth();
-
-  // Resume a half-finished signup (short-lived registration token still valid).
-  const initialRouteName = pendingRegistration
-    ? pendingRegistration.step >= 3
-      ? 'RegisterStep3'
-      : pendingRegistration.step === 2
-      ? 'RegisterStep2'
-      : 'RegisterStep1'
-    : 'Login';
-
+  // Always start on Login. The OTP verify response decides what comes next:
+  // a new user (or unfinished signup) is sent to the right RegisterStep from
+  // VerificationScreen, an existing chef goes to the dashboard / status screen.
   return (
-    <AuthStack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRouteName}>
+    <AuthStack.Navigator
+      screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: C.bg } }}
+      initialRouteName="Login"
+    >
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Verification" component={VerificationScreen} />
-      <AuthStack.Screen
-        name="RegisterStep1"
-        component={RegisterStep1}
-        initialParams={pendingRegistration ? { token: pendingRegistration.token, phoneNumber: pendingRegistration.phoneNumber } : undefined}
-      />
-      <AuthStack.Screen
-        name="RegisterStep2"
-        component={RegisterStep2}
-        initialParams={pendingRegistration ? { token: pendingRegistration.token, phoneNumber: pendingRegistration.phoneNumber } : undefined}
-      />
-      <AuthStack.Screen
-        name="RegisterStep3"
-        component={RegisterStep3}
-        initialParams={pendingRegistration ? { token: pendingRegistration.token, phoneNumber: pendingRegistration.phoneNumber } : undefined}
-      />
+      <AuthStack.Screen name="RegisterStep1" component={RegisterStep1} />
+      <AuthStack.Screen name="RegisterStep2" component={RegisterStep2} />
+      <AuthStack.Screen name="RegisterStep3" component={RegisterStep3} />
       <AuthStack.Screen name="RegistrationStatus" component={RegistrationStatusScreen} />
     </AuthStack.Navigator>
   );
@@ -141,12 +107,14 @@ function PendingReviewNavigator() {
   const { user } = useAuth();
   const status = user?.application_status ?? user?.status;
   return (
-    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+    <AuthStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: C.surface } }}>
       <AuthStack.Screen
         name="RegistrationStatus"
         component={RegistrationStatusScreen}
         initialParams={{ status }}
       />
+      {/* "Re-upload document" from the Rejected state. */}
+      <AuthStack.Screen name="RegisterStep3" component={RegisterStep3} />
     </AuthStack.Navigator>
   );
 }
@@ -154,17 +122,15 @@ function PendingReviewNavigator() {
 function AppNavigatorInner() {
   const { isAuthenticated, isLoading, user } = useAuth();
 
-  // Signed in, but the chef application is still in review / rejected: keep them
-  // on the status screen rather than the (unusable) dashboard. The API field is
-  // `application_status`; only a positively-known non-APPROVED value gates.
-  const chefStatus = user?.application_status ?? user?.status;
-  const pendingReview =
-    isAuthenticated && !!chefStatus && chefStatus !== 'APPROVED';
+  // Only an admin-APPROVED chef may enter the dashboard. Anything else — in
+  // review, rejected, or a status we couldn't confirm — stays on the status
+  // screen (fail closed; "Check for updates" re-fetches the profile).
+  const pendingReview = isAuthenticated && getApplicationStatus(user) !== 'APPROVED';
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg }}>
+        <ActivityIndicator size="large" color={C.primary} />
       </View>
     );
   }
@@ -179,68 +145,49 @@ function AppNavigatorInner() {
         ) : (
           <>
             <Stack.Screen name="Main" component={TabNavigator} />
+            <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false, animation: 'slide_from_right' }} />
+            <Stack.Screen name="Wallet" component={WalletScreen} options={{ headerShown: false, animation: 'slide_from_right' }} />
+            <Stack.Screen name="Withdraw" component={WithdrawScreen} options={{ headerShown: false, animation: 'slide_from_right' }} />
+            <Stack.Screen name="WithdrawStatus" component={WithdrawStatusScreen} options={{ headerShown: false, animation: 'fade' }} />
             <Stack.Screen 
               name="Logout" 
               component={LogoutScreen} 
               options={{ gestureEnabled: false }}
             />
-            <Stack.Screen 
-              name="EditProfile" 
-              component={EditProfileScreen} 
-              options={{ 
-                presentation: 'modal',
-                headerShown: false
-              }}
-            />
+            <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: false, animation: 'slide_from_right' }} />
           </>
         )}
         
         {/* Public or shared modals */}
-        <Stack.Screen 
-          name="CreateSlot" 
-          component={CreateSlotScreen} 
-          options={{ 
-            presentation: 'modal',
-            headerShown: true,
-            headerTitle: 'Create Meal Slot',
-            headerStyle: { backgroundColor: Colors.background },
-            headerTintColor: Colors.text,
-            headerTitleStyle: { fontWeight: 'bold' as const, fontSize: 18, color: Colors.text },
-          }} 
+        <Stack.Screen
+          name="CreateSlot"
+          component={CreateSlotScreen}
+          options={{ headerShown: false, animation: 'slide_from_bottom' }}
         />
-        <Stack.Screen 
-          name="ManageSchedule" 
-          component={ScheduleScreen} 
-          options={{ 
-            headerShown: true,
-            headerTitle: 'Manage Schedule',
-            headerStyle: { backgroundColor: Colors.background },
-            headerTintColor: Colors.text,
-            headerTitleStyle: { fontWeight: 'bold' as const, fontSize: 18, color: Colors.text },
-          }} 
+        <Stack.Screen
+          name="MealDetail"
+          component={MealDetailScreen}
+          options={{ headerShown: false, animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="Success"
+          component={SuccessScreen}
+          options={{ headerShown: false, animation: 'fade', gestureEnabled: false }}
+        />
+        <Stack.Screen
+          name="ManageSchedule"
+          component={DailyMenuScreen}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="ProofUpload"
           component={ProofUploadScreen}
-          options={{
-            headerShown: true,
-            headerTitle: 'Upload Proof',
-            headerStyle: { backgroundColor: Colors.background },
-            headerTintColor: Colors.text,
-            headerTitleStyle: { fontWeight: 'bold' as const, fontSize: 18, color: Colors.text },
-          }}
+          options={{ headerShown: false, animation: 'slide_from_right' }}
         />
         <Stack.Screen
           name="AddPantryItem"
           component={AddPantryItemScreen}
-          options={{
-            presentation: 'modal',
-            headerShown: true,
-            headerTitle: 'Pantry Item',
-            headerStyle: { backgroundColor: Colors.background },
-            headerTintColor: Colors.text,
-            headerTitleStyle: { fontWeight: 'bold' as const, fontSize: 18, color: Colors.text },
-          }}
+          options={{ headerShown: false, animation: 'slide_from_bottom' }}
         />
         <Stack.Screen 
           name="EventDetail" 
@@ -250,13 +197,7 @@ function AppNavigatorInner() {
         <Stack.Screen
           name="CreateEvent"
           component={CreateEventScreen}
-          options={{
-            headerShown: true,
-            headerTitle: 'New Social Event',
-            headerStyle: { backgroundColor: Colors.background },
-            headerTintColor: Colors.text,
-            headerTitleStyle: { fontWeight: 'bold' as const, fontSize: 18, color: Colors.text },
-          }}
+          options={{ headerShown: false, animation: 'slide_from_bottom' }}
         />
         <Stack.Screen
           name="Subscriptions"
@@ -276,18 +217,12 @@ function AppNavigatorInner() {
         <Stack.Screen
           name="FuelWeighIn"
           component={FuelWeighInScreen}
-          options={{
-            headerShown: true,
-            headerTitle: 'Weigh-In Proof',
-            headerStyle: { backgroundColor: Colors.background },
-            headerTintColor: Colors.text,
-            headerTitleStyle: { fontWeight: 'bold' as const, fontSize: 18, color: Colors.text },
-          }}
+          options={{ headerShown: false, animation: 'slide_from_right' }}
         />
         <Stack.Screen
           name="FuelPlanDetail"
           component={FuelPlanDetailScreen}
-          options={{ headerShown: false }}
+          options={{ headerShown: false, animation: 'slide_from_right' }}
         />
       </Stack.Navigator>
     </NavigationContainer>
