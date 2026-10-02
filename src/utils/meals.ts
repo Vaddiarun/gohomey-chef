@@ -14,10 +14,14 @@ export const platformFee = (user?: any): number => {
   return Number.isFinite(flat) && flat >= 0 ? flat : DEFAULT_PLATFORM_FEE;
 };
 
-/** Split for a single-item order at `price` (the fee is charged once per order). */
+/**
+ * Single-item order at `price` (the fee applies once per order). Confirmed
+ * 2026-10-02: the customer pays price + fee at checkout, and the chef's wallet
+ * is credited price − fee.
+ */
 export const feeBreakdown = (price: number, fee: number) => {
-  const charged = price > 0 ? Math.min(fee, price) : 0;
-  return { fee: charged, chefEarns: Math.max(0, price - charged), customerPrice: price };
+  const charged = price > 0 ? fee : 0;
+  return { fee: charged, chefEarns: Math.max(0, price - charged), customerPrice: price > 0 ? price + charged : 0 };
 };
 
 export type MealWindow = 'BREAKFAST' | 'LUNCH' | 'DINNER';

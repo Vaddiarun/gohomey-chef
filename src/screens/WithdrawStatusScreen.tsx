@@ -19,7 +19,7 @@ const shortDate = (iso?: string) => {
 
 /**
  * Withdrawal request status (Figma pending 76:14010 / approved 76:14054 / rejected 76:14104).
- * Params: state, reference, amount, account?, reviewedAt?, reason?, reasonDetail?
+ * Params: state, paid?, reference, amount, account?, reviewedAt?, utr?, reason?, reasonDetail?
  */
 export const WithdrawStatusScreen = () => {
   const navigation = useNavigation<any>();
@@ -40,11 +40,11 @@ export const WithdrawStatusScreen = () => {
       amountColor: C.primary,
     },
     APPROVED: {
-      title: 'Approved',
-      sub: on ? `Approved by admin on ${on}` : 'Approved by admin',
+      title: p.paid ? 'Paid' : 'Approved',
+      sub: p.paid ? (on ? `Sent to your bank on ${on}` : 'Sent to your bank') : on ? `Approved by admin on ${on}` : 'Approved by admin',
       halo: { color: C.success, halo: C.successHalo, haloInner: C.successHaloInner },
       Icon: Check,
-      banner: { bg: C.successBg, fg: C.success, Icon: Check, text: 'Queued for bank transfer' },
+      banner: { bg: C.successBg, fg: C.success, Icon: Check, text: p.paid ? 'Transfer completed' : 'Queued for bank transfer' },
       amountColor: C.primary,
     },
     REJECTED: {
@@ -61,6 +61,7 @@ export const WithdrawStatusScreen = () => {
     { k: 'Reference', v: p.reference || '—' },
     { k: 'Amount', v: p.amount != null ? `₹ ${Math.round(Number(p.amount)).toLocaleString('en-IN')}` : '—', color: view.amountColor },
     { k: 'Account', v: account },
+    ...(p.utr ? [{ k: 'Bank ref (UTR)', v: String(p.utr) }] : []),
   ];
 
   return (
@@ -103,13 +104,13 @@ export const WithdrawStatusScreen = () => {
               <Text style={[styles.buttonText, { color: C.danger }]}>Update payout details</Text>
             </PressableScale>
           </FadeInView>
-        ) : state === 'PENDING' ? (
+        ) : (
           <FadeInView delay={440}>
             <PressableScale style={styles.button} onPress={() => navigation.navigate('Wallet')} pressedScale={0.97}>
               <Text style={styles.buttonText}>Back to earnings</Text>
             </PressableScale>
           </FadeInView>
-        ) : null}
+        )}
       </ScrollView>
     </View>
   );

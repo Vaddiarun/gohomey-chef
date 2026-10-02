@@ -1,18 +1,19 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
-import { Ellipsis, IndianRupee, Landmark, Wallet } from 'lucide-react-native';
+import { ArrowUpRight, Ellipsis, IndianRupee, Landmark, Wallet } from 'lucide-react-native';
 import { C, F } from '../theme';
 import { FadeInView, PressableScale, PrimaryButton, ScreenHeader } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useChefOrders } from '../hooks/useChefOrders';
 import { formatRupees } from '../utils/orders';
 import { platformFee } from '../utils/meals';
-import { walletSummary } from '../utils/wallet';
+import { entryWhen, walletSummary } from '../utils/wallet';
+import { fetchWallet, fetchWithdrawals, statusParams, WalletInfo, Withdrawal, withdrawalLabel, withdrawalTone } from '../utils/withdrawals';
 
 const TILE_GRADIENT = ['#FF7A5C', '#FCB997', '#FFF5ED'] as const;
 
@@ -20,20 +21,33 @@ const TILE_GRADIENT = ['#FF7A5C', '#FCB997', '#FFF5ED'] as const;
 export const WalletScreen = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { orders, loading, refreshing, fetchOrders } = useChefOrders();
+  const [server, setServer] = useState<WalletInfo | undefined>();
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+
+  const loadPayouts = useCallback(() => {
+    fetchWallet(token).then(setServer);
+    fetchWithdrawals(token).then((w) => setWithdrawals(w ?? []));
+  }, [token]);
 
   useFocusEffect(
     useCallback(() => {
       fetchOrders();
-    }, [fetchOrders])
+      loadPayouts();
+    }, [fetchOrders, loadPayouts])
   );
 
-  const summary = useMemo(() => walletSummary(orders, platformFee(user), user), [orders, user]);
+  // Server wallet figures (when the API exists) override the order-derived ones.
+  const summary = useMemo(() => walletSummary(orders, server?.platform_fee_flat ?? platformFee(user), { ...user, ...server }), [orders, user, server]);
   const show = (n: number) => (loading && orders.length === 0 ? '—' : formatRupees(n));
 
   const openOrders = () => navigation.navigate('Main', { screen: 'Dashboard', params: { screen: 'Orders' } });
-  const payoutsSoon = () => Toast.show({ type: 'info', text1: 'Payout history', text2: 'Payout tracking is coming soon.' });
+  const latest = withdrawals[0];
+  const openPayouts = () =>
+    latest
+      ? navigation.navigate('WithdrawStatus', statusParams(latest))
+      : Toast.show({ type: 'info', text1: 'No withdrawals yet', text2: 'Your withdrawal requests will show up here.' });
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -43,7 +57,7 @@ export const WalletScreen = () => {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchOrders(true)} tintColor={C.primary} colors={[C.primary]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { fetchOrders(true); loadPayouts(); }} tintColor={C.primary} colors={[C.primary]} />}
       >
         {/* Earnings card (76:13864) */}
         <FadeInView offset={12} fromScale={0.97}>
@@ -87,7 +101,7 @@ export const WalletScreen = () => {
         <View style={styles.tiles}>
           {[
             { Icon: Wallet, title: 'Wallet', sub: 'View balance', onPress: () => navigation.navigate('Withdraw', { available: summary.available }) },
-            { Icon: Landmark, title: 'Payouts', sub: 'Track payouts', onPress: payoutsSoon },
+            { Icon: Landmark, title: 'Payouts', sub: 'Track payouts', onPress: openPayouts },
           ].map((t, i) => (
             <FadeInView key={t.title} delay={100 + i * 60} style={styles.tileWrap}>
               <PressableScale style={styles.tile} onPress={t.onPress} pressedScale={0.97}>
@@ -100,6 +114,34 @@ export const WalletScreen = () => {
             </FadeInView>
           ))}
         </View>
+
+        {/* Withdrawal requests — admin reviews, pays and updates the status. */}
+        {withdrawals.length > 0 && (
+          <FadeInView delay={180} style={styles.section}>
+            <Text style={styles.sectionTitle}>Withdrawals</Text>
+            {withdrawals.slice(0, 5).map((w) => {
+              const tone = withdrawalTone(w.status);
+              const color = tone === 'ok' ? C.successDeep : tone === 'bad' ? C.danger : C.warning;
+              return (
+                <PressableScale key={w.id} style={styles.entry} onPress={() => navigation.navigate('WithdrawStatus', statusParams(w))} pressedScale={0.98}>
+                  <View style={styles.entryIcon}>
+                    <ArrowUpRight size={16} color={C.primaryRing} strokeWidth={1.67} />
+                  </View>
+                  <View style={styles.entryText}>
+                    <Text style={styles.entryTitle} numberOfLines={1}>
+                      {w.reference ?? 'Withdrawal'}
+                    </Text>
+                    <Text style={styles.entryWhen}>{w.created_at ? entryWhen(new Date(w.created_at)) : ''}</Text>
+                  </View>
+                  <View style={styles.entryRight}>
+                    <Text style={[styles.entryAmount, { color: C.textStrong }]}>− {formatRupees(w.amount)}</Text>
+                    <Text style={[styles.entryStatus, { color }]}>{withdrawalLabel(w.status)}</Text>
+                  </View>
+                </PressableScale>
+              );
+            })}
+          </FadeInView>
+        )}
 
         {/* Recent earnings (76:13903) */}
         <FadeInView delay={200} style={styles.section}>

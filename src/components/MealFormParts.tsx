@@ -11,7 +11,7 @@ export const FeeBreakdown = ({ price, fee: flatFee }: { price: number; fee: numb
   const cards = [
     { label: 'Platform fee', value: fee, note: 'Flat, per order' },
     { label: 'Chef earns', value: chefEarns },
-    { label: 'Customer price', value: customerPrice },
+    { label: 'Customer pays', value: customerPrice },
   ];
   return (
     <View style={styles.feeRow}>

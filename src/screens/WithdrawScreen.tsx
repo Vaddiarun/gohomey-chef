@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -11,26 +11,46 @@ import { FadeInView, PressableScale, PrimaryButton, ScreenHeader } from '../comp
 import { useAuth } from '../context/AuthContext';
 import { formatRupees } from '../utils/orders';
 import { bankLabel, MIN_WITHDRAWAL } from '../utils/wallet';
+import { fetchWallet, requestWithdrawal, statusParams } from '../utils/withdrawals';
 import { KeyboardAware } from '../components/ui/KeyboardAware';
 
 const QUICK = [2000, 5000];
 
-/** Withdraw (Figma 76:13953). The request is blocked until the payout API exists. */
+/**
+ * Withdraw (Figma 76:13953). Raises a request for the admin portal; admin pays
+ * manually and updates the status. Shows "open soon" while the API is missing.
+ */
 export const WithdrawScreen = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const available = Math.max(0, Math.floor(Number(route.params?.available) || 0));
+  const { user, token } = useAuth();
+  const [available, setAvailable] = useState(Math.max(0, Math.floor(Number(route.params?.available) || 0)));
   const [amount, setAmount] = useState('');
   const [focused, setFocused] = useState(false);
+  const [sending, setSending] = useState(false);
+  // One key per screen visit: a retry after a timeout can't create a second request.
+  const idempotencyKey = useRef(`wd-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`).current;
+
+  // Prefer the server's balance when the wallet API exists.
+  useEffect(() => {
+    fetchWallet(token).then((w) => {
+      if (w?.wallet_balance != null) setAvailable(Math.max(0, Math.floor(w.wallet_balance)));
+    });
+  }, [token]);
 
   const bank = bankLabel(user);
   const value = parseInt(amount, 10) || 0;
 
-  const submit = () => {
-    if (!bank) {
-      Toast.show({ type: 'error', text1: 'Add a bank account', text2: 'Payouts go to the bank account on your profile.' });
+  const submit = async () => {
+    // Backend needs account number, IFSC and holder name before it accepts a request.
+    if (!bank || !user?.ifsc_code || !user?.bank_holder_name?.trim()) {
+      Toast.show({
+        type: 'error',
+        text1: 'Complete your bank details',
+        text2: !bank ? 'Payouts go to the bank account on your profile.' : 'Add the account holder name and IFSC to request a payout.',
+      });
+      navigation.navigate('EditProfile', { section: 'bank' });
       return;
     }
     if (value < MIN_WITHDRAWAL) {
@@ -41,8 +61,20 @@ export const WithdrawScreen = () => {
       Toast.show({ type: 'error', text1: 'Not enough balance', text2: `You can withdraw up to ${formatRupees(available)}.` });
       return;
     }
-    // No payout endpoint on the backend yet — never pretend the money moved.
-    Toast.show({ type: 'info', text1: 'Withdrawals open soon', text2: 'We’re setting up payouts. Contact support for an urgent payout.' });
+    setSending(true);
+    const r = await requestWithdrawal(token, value, idempotencyKey);
+    setSending(false);
+    if (r.ok) {
+      navigation.replace('WithdrawStatus', statusParams(r.data));
+      return;
+    }
+    if (r.unavailable) {
+      // Backend route not deployed yet — never pretend the money moved.
+      Toast.show({ type: 'info', text1: 'Withdrawals open soon', text2: 'We’re setting up payouts. Contact support for an urgent payout.' });
+      return;
+    }
+    // Server rules (minimum, 2 per week, one pending at a time…) come back as readable messages.
+    Toast.show({ type: 'error', text1: 'Request not sent', text2: r.message || 'Please try again.' });
   };
 
   return (
@@ -110,7 +142,7 @@ export const WithdrawScreen = () => {
           </FadeInView>
 
           <FadeInView delay={240}>
-            <PrimaryButton label="Continue" showChevron={false} onPress={submit} />
+            <PrimaryButton label="Continue" showChevron={false} onPress={submit} loading={sending} />
           </FadeInView>
         </ScrollView>
       </KeyboardAware>
